@@ -1,6 +1,6 @@
 // Authoritative game rules over a tiny key-value interface. The Devvit server
 // runs this against Redis; the local preview runs it against an in-memory map.
-import { CANDLES_PER_DAY, generateBoard, idx, judgeRun, type Cell } from './board';
+import { CANDLES_PER_DAY, dayNumber, generateBoard, idx, judgeRun, type Cell } from './board';
 import { isEpitaphId } from './epitaphs';
 import type {
   CarveResponse,
@@ -89,7 +89,7 @@ export class Engine {
     const last = num(st.last, -99);
     return {
       username: user,
-      candles: num(u.candles, CANDLES_PER_DAY),
+      candles: Math.max(0, CANDLES_PER_DAY - num(u.spent)),
       crossed: u.crossed === '1',
       rank: u.rank ? num(u.rank) : null,
       steps: u.steps ? num(u.steps) : null,
@@ -164,16 +164,21 @@ export class Engine {
 
   async fall(day: number, user: string, rawPath: unknown): Promise<FallResponse> {
     const path = parsePath(rawPath);
-    const me = await this.assertCanWalk(day, user);
+    await this.assertCanWalk(day, user);
     const outcome = judgeRun(generateBoard(day), path);
     if (outcome.kind !== 'fell') throw new GameError('That walk did not end in a pit');
     const i = idx(outcome.at.c, outcome.at.r);
+    // consume a candle atomically; concurrent requests can't overspend
+    const spent = await this.store.hIncrBy(K.user(day, user), 'spent', 1);
+    if (spent > CANDLES_PER_DAY) {
+      await this.store.hIncrBy(K.user(day, user), 'spent', -1);
+      throw new GameError('Your candles are spent for today');
+    }
     const u = await this.store.hGetAll(K.user(day, user));
     const fellAt = parseList(u.fellAt);
     fellAt.push(i);
     await Promise.all([
       this.store.hSet(K.user(day, user), {
-        candles: String(me.candles - 1),
         uncarved: String(i),
         uncarvedStep: String(outcome.steps),
         fellAt: JSON.stringify(fellAt),
@@ -190,6 +195,10 @@ export class Engine {
     if (!isEpitaphId(text)) throw new GameError('Unknown epitaph');
     const u = await this.store.hGetAll(K.user(day, user));
     if (!u.uncarved || num(u.uncarved) !== i) throw new GameError('Nothing to carve here');
+    // one epitaph per fall, even under concurrent requests
+    if (!(await this.store.hSetNX(K.user(day, user), `carved:${num(u.spent)}`, '1'))) {
+      throw new GameError('Your last words are already carved');
+    }
     const id = String(await this.store.incrBy(K.epSeq(day), 1));
     await this.store.hSet(K.ep(day, id), {
       user,
@@ -211,13 +220,17 @@ export class Engine {
     await this.assertCanWalk(day, user);
     const outcome = judgeRun(generateBoard(day), path);
     if (outcome.kind !== 'crossed') throw new GameError('That walk did not reach the far wall');
+    if (!(await this.store.hSetNX(K.user(day, user), 'crossLock', '1'))) throw new GameError('You already crossed today');
     const rank = await this.store.hIncrBy(K.stats(day), 'crossed', 1);
     await this.store.hSet(K.user(day, user), { crossed: '1', rank: String(rank), steps: String(outcome.steps) });
     await this.recordPath(day, user, path);
-    const st = await this.store.hGetAll(K.streak(user));
-    const last = num(st.last, -99);
-    const count = last === day - 1 ? num(st.count) + 1 : last === day ? num(st.count) : 1;
-    await this.store.hSet(K.streak(user), { last: String(day), count: String(count) });
+    // streaks only advance on today's crossing, never by replaying an old post
+    if (day === dayNumber()) {
+      const st = await this.store.hGetAll(K.streak(user));
+      const last = num(st.last, -99);
+      const count = last === day - 1 ? num(st.count) + 1 : last === day ? num(st.count) : 1;
+      await this.store.hSet(K.streak(user), { last: String(day), count: String(count) });
+    }
     const [me, dayDto] = await Promise.all([this.me(day, user), this.dayDto(day)]);
     return { type: 'cross', me, day: dayDto };
   }

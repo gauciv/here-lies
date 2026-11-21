@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { COLS, START, generateBoard, idx, neighbors, type Cell } from './board.ts';
+import { COLS, START, dayNumber, generateBoard, idx, neighbors, type Cell } from './board.ts';
 import { Engine, GameError } from './engine.ts';
 import { MemoryStore } from './memoryStore.ts';
 
-const DAY = 9;
+const DAY = dayNumber();
 const board = generateBoard(DAY);
 
 /** BFS path from start to target over safe stones (target itself may be a pit). */
@@ -72,6 +72,14 @@ test('candles run out after three falls', async () => {
     await e.carve(DAY, 'carol', f.grave.i, 0);
   }
   await assert.rejects(e.fall(DAY, 'carol', pitPath), /candles/);
+});
+
+test('concurrent falls cannot overspend candles', async () => {
+  const e = new Engine(new MemoryStore());
+  const results = await Promise.allSettled([0, 1, 2, 3, 4].map(() => e.fall(DAY, 'erin', pitPath)));
+  assert.ok(results.filter((r) => r.status === 'fulfilled').length <= 3);
+  const init = await e.init(DAY, 'erin', 't3_x');
+  assert.ok(init.me.candles >= 0);
 });
 
 test('rejects forged runs', async () => {
