@@ -13,12 +13,12 @@ import {
   type Cell,
 } from './board.ts';
 
-test('boards are deterministic per day', () => {
+void test('boards are deterministic per day', () => {
   assert.deepEqual(generateBoard(12).pits, generateBoard(12).pits);
   assert.notDeepEqual(generateBoard(12).pits, generateBoard(13).pits);
 });
 
-test('every board for a year is winnable with a safe start', () => {
+void test('every board for a year is winnable with a safe start', () => {
   for (let day = 1; day <= 365; day++) {
     const b = generateBoard(day);
     assert.equal(b.pits.length, COLS * ROWS);
@@ -30,7 +30,7 @@ test('every board for a year is winnable with a safe start', () => {
   }
 });
 
-test('clue counts touching pits', () => {
+void test('clue counts touching pits', () => {
   const b = generateBoard(5);
   for (let r = 0; r < ROWS; r++)
     for (let c = 0; c < COLS; c++) {
@@ -61,7 +61,7 @@ const safePath = (day: number): Cell[] => {
   return path;
 };
 
-test('judgeRun accepts a real crossing and a fall, rejects cheats', () => {
+void test('judgeRun accepts a real crossing and a fall, rejects cheats', () => {
   const day = 7, b = generateBoard(day);
   const path = safePath(day);
   assert.equal(judgeRun(b, path).kind, 'crossed');

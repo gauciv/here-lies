@@ -34,7 +34,7 @@ const pathTo = (target: (c: Cell) => boolean): Cell[] => {
 const pitPath = pathTo((c) => board.pits[idx(c.c, c.r)] === true);
 const crossPath = pathTo((c) => c.r === 0 && !board.pits[idx(c.c, c.r)]);
 
-test('fall → carve → vote → cross loop', async () => {
+void test('fall → carve → vote → cross loop', async () => {
   const e = new Engine(new MemoryStore());
   const fell = await e.fall(DAY, 'alice', pitPath);
   assert.equal(fell.me.candles, 2);
@@ -65,7 +65,7 @@ test('fall → carve → vote → cross loop', async () => {
   assert.equal(init.day.crossed, 1);
 });
 
-test('candles run out after three falls', async () => {
+void test('candles run out after three falls', async () => {
   const e = new Engine(new MemoryStore());
   for (let k = 0; k < 3; k++) {
     const f = await e.fall(DAY, 'carol', pitPath);
@@ -74,7 +74,7 @@ test('candles run out after three falls', async () => {
   await assert.rejects(e.fall(DAY, 'carol', pitPath), /candles/);
 });
 
-test('concurrent falls cannot overspend candles', async () => {
+void test('concurrent falls cannot overspend candles', async () => {
   const e = new Engine(new MemoryStore());
   const results = await Promise.allSettled([0, 1, 2, 3, 4].map(() => e.fall(DAY, 'erin', pitPath)));
   assert.ok(results.filter((r) => r.status === 'fulfilled').length <= 3);
@@ -82,7 +82,7 @@ test('concurrent falls cannot overspend candles', async () => {
   assert.ok(init.me.candles >= 0);
 });
 
-test('rejects forged runs', async () => {
+void test('rejects forged runs', async () => {
   const e = new Engine(new MemoryStore());
   await assert.rejects(e.cross(DAY, 'dave', [{ c: 3, r: 0 }]), GameError);
   await assert.rejects(e.fall(DAY, 'dave', crossPath), GameError);
