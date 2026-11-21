@@ -1,0 +1,142 @@
+import { useEffect, useState } from 'react';
+import { CANDLES_PER_DAY, dayStartUtc } from '../../shared/board';
+import { EPITAPHS, epitaphText, verdictOf, type EpitaphId, type Verdict } from '../../shared/epitaphs';
+import type { DayDto, EpitaphDto, GraveDto, MeDto, Vote } from '../../shared/api';
+
+const VERDICT_LABEL: Record<Verdict, string> = {
+  trusted: 'Trusted',
+  liar: 'Known liar',
+  disputed: 'Disputed',
+  unjudged: 'Unjudged',
+};
+
+const ordinal = (n: number): string => {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+};
+
+const useCountdown = (day: number): string => {
+  const target = dayStartUtc(day + 1);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(t);
+  }, []);
+  const ms = Math.max(0, target - now);
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  return `${h}h ${m.toString().padStart(2, '0')}m`;
+};
+
+const VoteRow = ({ e, me, onVote }: { e: EpitaphDto; me: MeDto; onVote: (id: string, v: Vote) => void }) => {
+  const own = e.user === me.username;
+  const voted = e.myVote !== null;
+  return (
+    <div className="vote-row">
+      <button className={`btn btn-honest${e.myVote === 'honest' ? ' is-picked' : ''}`} disabled={own || voted} onClick={() => onVote(e.id, 'honest')}>
+        Honest <span className="count">{e.honest}</span>
+      </button>
+      <button className={`btn btn-liar${e.myVote === 'liar' ? ' is-picked' : ''}`} disabled={own || voted} onClick={() => onVote(e.id, 'liar')}>
+        Liar <span className="count">{e.liar}</span>
+      </button>
+    </div>
+  );
+};
+
+export const GraveCard = ({ grave, list, me, onVote, onClose }: {
+  grave: GraveDto; list: EpitaphDto[] | undefined; me: MeDto; onVote: (id: string, v: Vote) => void; onClose: () => void;
+}) => {
+  const top = grave.top;
+  const others = (list ?? []).filter((e) => e.id !== top?.id);
+  const verdict = top ? verdictOf(top.honest, top.liar) : 'unjudged';
+  return (
+    <section className="card" aria-label="Grave">
+      <button className="card-close" onClick={onClose} aria-label="Close">×</button>
+      {top ? (
+        <>
+          <p className="card-kicker">Here lies {top.user === me.username ? 'you' : `u/${top.user}`}</p>
+          <p className="epitaph">“{epitaphText(top.text)}”</p>
+          <p className="card-meta">
+            Fell on step {top.step} · <span className={`verdict verdict-${verdict}`}>{VERDICT_LABEL[verdict]}</span>
+            {grave.falls > 1 ? ` · ${grave.falls} fell here` : ''}
+          </p>
+          <VoteRow e={top} me={me} onVote={onVote} />
+          {others.length > 0 && (
+            <details className="more">
+              <summary>{others.length} more last words here</summary>
+              <ul>
+                {others.map((e) => (
+                  <li key={e.id}>
+                    <span className="more-text">“{epitaphText(e.text)}”</span>
+                    <span className="more-who">u/{e.user} · {e.honest} honest · {e.liar} liar</span>
+                    {e.myVote === null && e.user !== me.username && <VoteRow e={e} me={me} onVote={onVote} />}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </>
+      ) : (
+        <>
+          <p className="card-kicker">{grave.falls} fell here</p>
+          <p className="epitaph epitaph-silent">They left no words.</p>
+        </>
+      )}
+    </section>
+  );
+};
+
+export const CarveCard = ({ me, step, onCarve }: { me: MeDto; step: number | null; onCarve: (t: EpitaphId) => void }) => {
+  const [busy, setBusy] = useState(false);
+  return (
+    <section className="card card-carve" aria-label="Carve your last words">
+      <p className="card-kicker">Here lies you</p>
+      <p className="epitaph">The stone gave way{step ? ` on step ${step}` : ''}.</p>
+      <p className="card-meta">
+        Leave last words for whoever walks after you. Tell the truth, or don't.
+      </p>
+      <div className="carve-grid">
+        {EPITAPHS.map((t, k) => (
+          <button key={t} className="btn btn-carve" disabled={busy} onClick={() => { setBusy(true); onCarve(k); }}>
+            {t}
+          </button>
+        ))}
+      </div>
+      <p className="card-foot">
+        {me.candles > 0 ? `${me.candles} of ${CANDLES_PER_DAY} candles left. Your next walk begins at the stairs.` : 'That was your last candle.'}
+      </p>
+    </section>
+  );
+};
+
+export const CrossedCard = ({ me, day, onClose }: { me: MeDto; day: DayDto; onClose: () => void }) => {
+  const countdown = useCountdown(day.day);
+  return (
+    <section className="card card-win" aria-label="You crossed">
+      <button className="card-close" onClick={onClose} aria-label="Close">×</button>
+      <p className="card-kicker">The far wall</p>
+      <p className="epitaph">You crossed.</p>
+      <dl className="stats">
+        <div><dt>Arrived</dt><dd>{me.rank ? ordinal(me.rank) : '—'}</dd></div>
+        <div><dt>Steps</dt><dd>{me.steps ?? '—'}</dd></div>
+        <div><dt>Candles</dt><dd>{me.candles}/{CANDLES_PER_DAY}</dd></div>
+        <div><dt>Streak</dt><dd>{me.streak}</dd></div>
+      </dl>
+      <p className="card-foot">{day.fallen} lie behind you. A new crossing opens in {countdown}.</p>
+    </section>
+  );
+};
+
+export const SpentCard = ({ day, onClose }: { day: DayDto; onClose: () => void }) => {
+  const countdown = useCountdown(day.day);
+  return (
+    <section className="card" aria-label="Out of candles">
+      <button className="card-close" onClick={onClose} aria-label="Close">×</button>
+      <p className="card-kicker">Your candles are spent</p>
+      <p className="epitaph">Rest now.</p>
+      <p className="card-meta">Your graves will guide, or mislead, everyone who walks today. You can still judge the dead: tap any grave.</p>
+      <p className="card-foot">{day.crossed} crossed · {day.fallen} fell · new crossing in {countdown}</p>
+    </section>
+  );
+};
