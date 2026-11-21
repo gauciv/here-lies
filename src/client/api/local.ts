@@ -1,0 +1,64 @@
+// Local preview backend: the real Engine over an in-memory store, seeded with
+// simulated wanderers so the board looks like a busy day. Used on localhost only.
+import { CANDLES_PER_DAY, START, dayNumber, generateBoard, idx, mulberry32, neighbors, type Cell } from '../../shared/board';
+import { EPITAPHS } from '../../shared/epitaphs';
+import { Engine } from '../../shared/engine';
+import { MemoryStore } from '../../shared/memoryStore';
+import type { GameApi } from './types';
+
+const ME = 'you';
+const GHOSTS = [
+  'morrow_fen', 'quietcartographer', 'elk_and_ember', 'tallowwick', 'bramble_owl', 'saltmarsh_sam',
+  'nightjar_77', 'grey_lantern', 'mothwing', 'old_cobbles', 'fernhollow', 'ashgrove_ada', 'pitfall_pete',
+  'lanternless', 'wren_in_wool', 'cinder_and_salt',
+];
+
+const store = new MemoryStore();
+const engine = new Engine(store);
+const day = dayNumber();
+const board = generateBoard(day);
+
+const seed = async () => {
+  const rand = mulberry32(day * 101 + 5);
+  const epIds: string[] = [];
+  for (const ghost of GHOSTS) {
+    for (let life = 0; life < CANDLES_PER_DAY; life++) {
+      const path: Cell[] = [];
+      let at: Cell = START;
+      let outcome: 'fell' | 'crossed' | null = null;
+      for (let step = 0; step < 24 && !outcome; step++) {
+        const options = neighbors(at.c, at.r).filter((n) => !path.some((p) => p.c === n.c && p.r === n.r));
+        if (!options.length) break;
+        // wander mostly upward, a little sideways
+        options.sort((a, b) => a.r - b.r + (rand() - 0.5) * 2.2);
+        const next = options[0]!;
+        path.push(next);
+        at = next;
+        if (board.pits[idx(next.c, next.r)]) outcome = 'fell';
+        else if (next.r === 0) outcome = 'crossed';
+      }
+      if (outcome === 'crossed') { await engine.cross(day, ghost, path); break; }
+      if (outcome !== 'fell') break;
+      const fell = await engine.fall(day, ghost, path);
+      const carved = await engine.carve(day, ghost, fell.grave.i, Math.floor(rand() * EPITAPHS.length));
+      if (carved.grave.top) epIds.push(carved.grave.top.id);
+    }
+  }
+  for (const voter of GHOSTS) {
+    for (const id of epIds) {
+      if (rand() < 0.45) await engine.vote(day, voter, id, rand() < 0.62 ? 'honest' : 'liar').catch(() => undefined);
+    }
+  }
+};
+
+const ready = seed();
+const wait = <T>(p: Promise<T>): Promise<T> => ready.then(() => new Promise((res) => setTimeout(res, 80))).then(() => p);
+
+export const localApi: GameApi = {
+  init: () => wait(Promise.resolve()).then(() => engine.init(day, ME, 't3_local')),
+  fall: (d, path) => wait(Promise.resolve()).then(() => engine.fall(d, ME, path)),
+  cross: (d, path) => wait(Promise.resolve()).then(() => engine.cross(d, ME, path)),
+  carve: (d, i, text) => wait(Promise.resolve()).then(() => engine.carve(d, ME, i, text)),
+  vote: (d, id, v) => wait(Promise.resolve()).then(() => engine.vote(d, ME, id, v)),
+  grave: (d, i) => wait(Promise.resolve()).then(() => engine.graveDetail(d, ME, i)),
+};
