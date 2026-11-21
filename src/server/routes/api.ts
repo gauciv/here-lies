@@ -1,93 +1,90 @@
-import { Hono } from 'hono';
-import { context, redis, reddit } from '@devvit/web/server';
-import type {
-  DecrementResponse,
-  IncrementResponse,
-  InitResponse,
-} from '../../shared/api';
+import { Hono, type Context } from 'hono';
+import { context, reddit } from '@devvit/web/server';
+import { Engine, GameError } from '../../shared/engine';
+import type { ErrorResponse } from '../../shared/api';
+import { redisStore } from '../core/redisStore';
+import { postDay } from '../core/post';
 
-type ErrorResponse = {
-  status: 'error';
-  message: string;
-};
+const engine = new Engine(redisStore);
 
 export const api = new Hono();
 
+const username = async (): Promise<string> => (await reddit.getCurrentUsername()) ?? 'anonymous';
+
+const fail = (c: Context, error: unknown) => {
+  if (error instanceof GameError) return c.json<ErrorResponse>({ status: 'error', message: error.message }, 400);
+  console.error('api error', error);
+  return c.json<ErrorResponse>({ status: 'error', message: 'Something went wrong in the dark. Try again.' }, 500);
+};
+
+const readBody = async (c: Context): Promise<Record<string, unknown>> => {
+  const body: unknown = await c.req.json().catch(() => ({}));
+  return typeof body === 'object' && body !== null ? { ...body } : {};
+};
+
+/** Every mutation must target the day this post plays. */
+const dayFrom = (body: Record<string, unknown>): number => {
+  const day = postDay();
+  if (body.day !== day) throw new GameError('This crossing has changed. Reload the post.');
+  return day;
+};
+
 api.get('/init', async (c) => {
-  const { postId } = context;
-
-  if (!postId) {
-    console.error('API Init Error: postId not found in devvit context');
-    return c.json<ErrorResponse>(
-      {
-        status: 'error',
-        message: 'postId is required but missing from context',
-      },
-      400
-    );
-  }
-
   try {
-    const [count, username] = await Promise.all([
-      redis.get('count'),
-      reddit.getCurrentUsername(),
-    ]);
-
-    return c.json<InitResponse>({
-      type: 'init',
-      postId: postId,
-      count: count ? parseInt(count) : 0,
-      username: username ?? 'anonymous',
-    });
-  } catch (error) {
-    console.error(`API Init Error for post ${postId}:`, error);
-    let errorMessage = 'Unknown error during initialization';
-    if (error instanceof Error) {
-      errorMessage = `Initialization failed: ${error.message}`;
-    }
-    return c.json<ErrorResponse>(
-      { status: 'error', message: errorMessage },
-      400
-    );
+    const { postId } = context;
+    if (!postId) throw new GameError('Open the game from its post');
+    return c.json(await engine.init(postDay(), await username(), postId));
+  } catch (e) {
+    return fail(c, e);
   }
 });
 
-api.post('/increment', async (c) => {
-  const { postId } = context;
-  if (!postId) {
-    return c.json<ErrorResponse>(
-      {
-        status: 'error',
-        message: 'postId is required',
-      },
-      400
-    );
+api.post('/fall', async (c) => {
+  try {
+    const body = await readBody(c);
+    return c.json(await engine.fall(dayFrom(body), await username(), body.path));
+  } catch (e) {
+    return fail(c, e);
   }
-
-  const count = await redis.incrBy('count', 1);
-  return c.json<IncrementResponse>({
-    count,
-    postId,
-    type: 'increment',
-  });
 });
 
-api.post('/decrement', async (c) => {
-  const { postId } = context;
-  if (!postId) {
-    return c.json<ErrorResponse>(
-      {
-        status: 'error',
-        message: 'postId is required',
-      },
-      400
-    );
+api.post('/cross', async (c) => {
+  try {
+    const body = await readBody(c);
+    return c.json(await engine.cross(dayFrom(body), await username(), body.path));
+  } catch (e) {
+    return fail(c, e);
   }
+});
 
-  const count = await redis.incrBy('count', -1);
-  return c.json<DecrementResponse>({
-    count,
-    postId,
-    type: 'decrement',
-  });
+api.post('/carve', async (c) => {
+  try {
+    const body = await readBody(c);
+    const i = Number(body.i);
+    if (!Number.isInteger(i)) throw new GameError('Unknown grave');
+    return c.json(await engine.carve(dayFrom(body), await username(), i, body.text));
+  } catch (e) {
+    return fail(c, e);
+  }
+});
+
+api.post('/vote', async (c) => {
+  try {
+    const body = await readBody(c);
+    if (typeof body.id !== 'string') throw new GameError('Unknown epitaph');
+    return c.json(await engine.vote(dayFrom(body), await username(), body.id, body.vote));
+  } catch (e) {
+    return fail(c, e);
+  }
+});
+
+api.get('/grave', async (c) => {
+  try {
+    const day = postDay();
+    const i = Number(c.req.query('i'));
+    if (!Number.isInteger(i)) throw new GameError('Unknown grave');
+    return c.json(await engine.graveDetail(day, await username(), i));
+  } catch (e) {
+    return fail(c, e);
+  }
 });
