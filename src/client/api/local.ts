@@ -1,7 +1,7 @@
 // Local preview backend: the real Engine over an in-memory store, seeded with
 // simulated wanderers so the board looks like a busy day. Used on localhost only.
-import { CANDLES_PER_DAY, START, dayNumber, generateBoard, idx, mulberry32, neighbors, type Cell } from '../../shared/board';
-import { EPITAPHS } from '../../shared/epitaphs';
+import { CANDLES_PER_DAY, START, cellOf, dayNumber, generateBoard, idx, mulberry32, neighbors, type Cell } from '../../shared/board';
+import { directionBetween, validDirections } from '../../shared/epitaphs';
 import { Engine } from '../../shared/engine';
 import { MemoryStore } from '../../shared/memoryStore';
 import type { GameApi } from './types';
@@ -40,7 +40,12 @@ const seed = async () => {
       if (outcome === 'crossed') { await engine.cross(day, ghost, path); break; }
       if (outcome !== 'fell') break;
       const fell = await engine.fall(day, ghost, path);
-      const carved = await engine.carve(day, ghost, fell.grave.i, Math.floor(rand() * EPITAPHS.length));
+      // most simulated players point honestly at the pit; some lie
+      const stone = cellOf(fell.grave.i);
+      const truth = directionBetween(stone, at) ?? 0;
+      const options = validDirections(stone).filter((d) => d !== truth);
+      const arrow = rand() < 0.65 || !options.length ? truth : options[Math.floor(rand() * options.length)]!;
+      const carved = await engine.carve(day, ghost, fell.grave.i, arrow);
       if (carved.grave.top) epIds.push(carved.grave.top.id);
     }
   }
@@ -58,7 +63,7 @@ export const localApi: GameApi = {
   init: () => wait(Promise.resolve()).then(() => engine.init(day, ME, 't3_local')),
   fall: (d, path) => wait(Promise.resolve()).then(() => engine.fall(d, ME, path)),
   cross: (d, path) => wait(Promise.resolve()).then(() => engine.cross(d, ME, path)),
-  carve: (d, i, text) => wait(Promise.resolve()).then(() => engine.carve(d, ME, i, text)),
+  carve: (d, i, arrow) => wait(Promise.resolve()).then(() => engine.carve(d, ME, i, arrow)),
   vote: (d, id, v) => wait(Promise.resolve()).then(() => engine.vote(d, ME, id, v)),
   grave: (d, i) => wait(Promise.resolve()).then(() => engine.graveDetail(d, ME, i)),
   share: (d) =>
