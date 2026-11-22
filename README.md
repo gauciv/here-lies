@@ -15,7 +15,7 @@ Built for Reddit's Game of the Day Hackathon on Devvit Web.
 3. **Reach the door at the far wall** to cross.
 4. You have **3 candles** a day. Falling into a pit costs one, and you start again from the stairs. The stones you already walked stay remembered.
 5. **When you fall, carve your last words.** Pick one line from a fixed list. You can tell the truth, or you can lie.
-6. **Read the graves in your torchlight.** Tap a grave to see its last words and judge them: **Honest** or **Liar**. Well-trusted graves earn the label *Trusted*; graves voted dishonest get a red scratch and the label *Known liar*.
+6. **Read the graves in your torchlight.** Every grave marks a pit; each skull piled beside it means one more person fell there. Tap a grave to see its last words and judge them: **Honest** or **Liar**. Well-trusted graves earn the label *Trusted*; graves voted dishonest get a red scratch and the label *Known liar*.
 7. When you cross, or your candles run out, **the dark lifts** and you can see and judge every grave on the board. You can also choose to share your result as a comment or join the community.
 
 ### The numbers, explained
