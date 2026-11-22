@@ -5,10 +5,11 @@ import { createRoot } from 'react-dom/client';
 import { CarveCard, FellAgainCard, GameOverCard, GraveCard, IntroCard, SpentCard, VictoryCard } from './game/Cards';
 import { Hud, MuteButton } from './game/Hud';
 import { Standby, type StandbyHandle } from './game/Standby';
+import { isDayOver, verdictFor } from './game/reveal';
 import { sound } from './engine/sound';
 import { Stage } from './game/Stage';
 import { cellOf } from '../shared/board';
-import { arrowIsTrue, directionBetween } from '../shared/epitaphs';
+import { directionBetween } from '../shared/epitaphs';
 import { useGame } from './game/useGame';
 import type { GraveView, SceneState } from './engine/scene';
 
@@ -43,13 +44,17 @@ export const App = () => {
   // through the door the moment the run is won (or when 'Your result' is reopened later)
   const exiting = view === 'board' && s.phase === 'crossed' && s.card.kind === 'crossed';
 
+  // re-read every render: a post left open overnight unlocks the full reveal at the reset
+  const dayOver = s.board ? isDayOver(s.board.day) : false;
   const scene = useMemo<SceneState | null>(() => {
     if (!s.board) return null;
-    // the dark lifts once the run is over, but not while your ghost is still mourning itself
-    // the dark lifts once the run is over, but not while your ghost mourns or your dwarf heads out
+    // the dark lifts once the run is over (not while your ghost mourns or your dwarf heads out);
+    // the full answer waits for tomorrow, so today's room can't be spoiled by a screenshot
     const leavingThroughDoor = s.phase === 'crossed' && s.card.kind === 'crossed';
-    const revealAll = (s.phase === 'crossed' || s.phase === 'idle') && s.card.kind !== 'gameOver' && !leavingThroughDoor;
+    const runOver = (s.phase === 'crossed' || s.phase === 'idle') && s.card.kind !== 'gameOver' && !leavingThroughDoor;
+    const revealAll = runOver && dayOver;
     const board = s.board;
+    const me = s.me;
     const graves = new Map<number, GraveView>();
     s.graves.forEach((g) => {
       const arrow = g.top?.arrow ?? null;
@@ -57,14 +62,16 @@ export const App = () => {
         arrow,
         falls: g.falls,
         mine: g.mine,
-        // the truth is only shown once your run is over
-        truth: revealAll && arrow !== null ? arrowIsTrue(board, g.i, arrow) : null,
+        // your own arrow's verdict once your run is over; everyone else's tomorrow
+        truth: me ? verdictFor(board, g, me, runOver) : null,
         wear: g.top?.visits ?? 0,
       });
     });
     const carving = s.card.kind === 'carve' ? s.card.i : null;
     return {
       board: s.board, revealed: s.revealed, player: s.player, graves, phase: s.phase, revealAll,
+      lifted: runOver,
+      ownPits: new Set(s.me?.fellInto ?? []),
       // your ghost lingers in its pit while you carve, or until you respawn
       ghost: carving !== null || s.card.kind === 'fellAgain' || s.card.kind === 'gameOver',
       carvePreview: carving !== null ? { stone: carving, dir: s.carveDir } : null,
@@ -72,7 +79,7 @@ export const App = () => {
       soulLeaving,
       exiting,
     };
-  }, [s.board, s.revealed, s.player, s.graves, s.phase, s.card, s.carveDir, s.fading, soulLeaving, exiting]);
+  }, [s.board, s.revealed, s.player, s.graves, s.phase, s.me, s.card, s.carveDir, s.fading, soulLeaving, exiting, dayOver]);
 
   /** Fade to black, swap what's on screen, fade back in. */
   const crossFade = useCallback((to: 'camp' | 'board') => {
@@ -163,7 +170,7 @@ export const App = () => {
         {s.me && s.day && !s.fading && (
           <div className={`card-layer ${s.player.r >= 4 && s.phase !== 'crossed' && card.kind !== 'fellAgain' && card.kind !== 'gameOver' ? 'card-layer-top' : ''}`}>
             {card.kind === 'grave' && grave && s.board && (
-              <GraveCard grave={grave} me={s.me} board={s.board} judged={s.phase === 'crossed' || s.phase === 'idle'} onClose={closeCard} />
+              <GraveCard grave={grave} me={s.me} truth={verdictFor(s.board, grave, s.me, s.phase === 'crossed' || s.phase === 'idle')} onClose={closeCard} />
             )}
             {card.kind === 'intro' && <IntroCard onStart={startPlaying} />}
             {card.kind === 'fellAgain' && <FellAgainCard me={s.me} onWalk={walkAgain} />}

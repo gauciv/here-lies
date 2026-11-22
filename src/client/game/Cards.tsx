@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CANDLES_PER_DAY, dayStartUtc } from '../../shared/board';
-import { arrowIsTrue, directionName, isForgotten, validDirections, type Direction } from '../../shared/epitaphs';
+import { directionName, isForgotten, validDirections, type Direction } from '../../shared/epitaphs';
 import type { Board, Cell } from '../../shared/board';
 import { arrowRows } from '../engine/sprites';
 import type { ColorKey } from '../engine/palette';
@@ -8,6 +8,7 @@ import { PixelIcon } from './PixelIcon';
 import type { DayDto, GraveDto, MeDto, MyArrowDto } from '../../shared/api';
 import { formatTime } from '../../shared/pioneer';
 import { subredditName } from './reddit';
+import { isDayOver } from './reveal';
 import { TileIcon } from './TileIcon';
 import { CANDLE_LEGEND, CANDLE_LIT, FLAME, FLAME_LEGEND } from './icons';
 
@@ -81,11 +82,10 @@ const useCountdown = (day: number): string => {
 };
 
 /** A slab: one arrow. While you walk it is only a claim; after your run, the truth. */
-export const GraveCard = ({ grave, me, board, judged, onClose }: {
-  grave: GraveDto; me: MeDto; board: Board; judged: boolean; onClose: () => void;
+export const GraveCard = ({ grave, me, truth, onClose }: {
+  grave: GraveDto; me: MeDto; truth: boolean | null; onClose: () => void;
 }) => {
   const top = grave.top;
-  const truth = top && judged ? arrowIsTrue(board, grave.i, top.arrow) : null;
   if (!top) return null;
   return (
     <section className="card card-grave" aria-label="Grave slab">
@@ -236,7 +236,11 @@ export const SpentCard = ({ me, day, onClose, onShare, onJoin }: { me: MeDto; da
       <button className="card-close" onClick={onClose} aria-label="Close">×</button>
       <p className="card-kicker">Your candles are spent</p>
       <p className="epitaph">Rest now.</p>
-      <p className="card-meta">The dark has lifted: every pit is shown, and every arrow is revealed as truth or lie.</p>
+      <p className="card-meta">
+        {isDayOver(day.day)
+          ? 'The dark has lifted: every pit is shown, and every arrow is revealed as truth or lie.'
+          : 'Every pit, and every lie, is revealed tomorrow, once the day is done.'}
+      </p>
       {me.myArrow && <ArrowRecord mine={me.myArrow} />}
       <EndActions me={me} onShare={onShare} onJoin={onJoin} />
       <p className="card-foot">{day.crossed} crossed · {day.fallen} fell · new crossing in {countdown}</p>

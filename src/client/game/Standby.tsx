@@ -6,6 +6,7 @@ import { CAMP_H, CAMP_W, CampScene, type CampCue } from '../engine/camp';
 import { DOOR_INK, FLAME, FLAME_LEGEND, INK_LEGEND, SKULL_INK } from './icons';
 import { PixelIcon } from './PixelIcon';
 import { MAP_H, MAP_W, RoomMap } from './RoomMap';
+import { isDayOver } from './reveal';
 
 export type StandbyHandle = {
   enter: (onDone: () => void, onCue?: (cue: CampCue) => void) => void;
@@ -185,7 +186,7 @@ export const Standby = forwardRef<StandbyHandle, {
       </div>
       <div className="camp-actions">
         {finished ? (
-          <button className="btn btn-share btn-enter" onClick={onReview}>Review the room</button>
+          <button className="btn btn-share btn-enter" onClick={onReview}>{day && !isDayOver(day.day) ? 'Review your run' : 'Review the room'}</button>
         ) : (
           <button className="btn btn-share btn-enter" disabled={busy || !me} onClick={onEnter}>Enter the dungeon</button>
         )}

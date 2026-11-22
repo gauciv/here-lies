@@ -8,6 +8,7 @@ import { sound } from '../engine/sound';
 import { navigateTo, showForm } from '@devvit/web/client';
 import { defaultCaption } from '../../shared/share';
 import { subredditName } from './reddit';
+import { isDayOver } from './reveal';
 
 export type Card =
   | { kind: 'none' }
@@ -351,19 +352,23 @@ export const useGame = () => {
     setS((p) => (p.card.kind === 'carve' ? p : { ...p, card: { kind: 'none' } }));
   }, []);
 
+  const dayOver = s.board ? isDayOver(s.board.day) : false;
   const hint = useMemo(() => {
     if (s.status !== 'ready') return '';
     if (s.card.kind === 'gameOver' || s.card.kind === 'fellAgain' || s.card.kind === 'crossed') return ''; // the scene speaks for itself
     if (s.phase === 'falling') return 'The stone gives way…';
     if (s.phase === 'crossing') return 'The gate opens.';
-    if (s.phase === 'crossed' || s.phase === 'idle') return s.graves.size ? 'The dark has lifted. Tap a slab to see if its arrow lied.' : '';
+    if (s.phase === 'crossed' || s.phase === 'idle') {
+      if (!dayOver) return 'Every pit, and every lie, is revealed tomorrow.';
+      return s.graves.size ? 'The dark has lifted. Tap a slab to see if its arrow lied.' : '';
+    }
     if (s.phase !== 'walking') return '';
     const seen = s.revealed.size;
     if (seen <= 1 && s.walkedThisRun === 0) return 'Find the door hidden in the far wall. Tap a glowing stone to step.';
     if (seen <= 3) return 'A number counts the pits touching that stone.';
     if (s.graves.size && seen <= 6) return 'A slab marks where someone stood before they fell. Its arrow may lie.';
     return 'Find the door in the far wall.';
-  }, [s.status, s.card.kind, s.phase, s.revealed.size, s.walkedThisRun, s.graves.size]);
+  }, [s.status, dayOver, s.card.kind, s.phase, s.revealed.size, s.walkedThisRun, s.graves.size]);
 
   const startPlaying = useCallback(() => {
     markIntroSeen();

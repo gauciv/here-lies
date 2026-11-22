@@ -36,6 +36,10 @@ export type SceneState = {
   phase: Phase;
   /** the dark has lifted (crossed, or out of candles): show the whole board */
   revealAll: boolean;
+  /** the run is over: daylight in the room (the full answer may still be withheld until tomorrow) */
+  lifted: boolean;
+  /** pits this player fell into today: shown in daylight even before the full reveal */
+  ownPits: ReadonlySet<number>;
   /** just died: the hero stands on their slab as a ghost while carving */
   ghost: boolean;
   /** carving preview: the slab's stone and the arrow being considered */
@@ -244,7 +248,7 @@ export class Scene {
   private ensureLayer(s: SceneState, doorOpen: boolean): void {
     if (!this.atlas) return;
     let key = `${s.board.day}|${doorOpen ? 1 : 0}|${[...s.revealed].sort((a, b) => a - b).join(',')}|${s.ghost ? idx(s.player.c, s.player.r) : '-'}|`;
-    key += s.revealAll ? 'R|' : '';
+    key += s.revealAll ? 'R|' : s.lifted ? `L${[...s.ownPits].join(',')}|` : '';
     s.graves.forEach((g, i) => { key += `${i}:${g.arrow}:${g.truth}:${g.wear}:${g.mine ? 1 : 0};`; });
     if (key === this.layerKey) return;
     this.layerKey = key;
@@ -269,6 +273,9 @@ export class Scene {
       s.board.pits.forEach((isPit, p) => {
         if (isPit) this.frameOf(x, 'hole', (p % COLS) * TILE, TOP + Math.floor(p / COLS) * TILE);
       });
+    } else if (s.lifted) {
+      // until tomorrow's full reveal, daylight shows only the pits you fell into yourself
+      for (const p of s.ownPits) this.frameOf(x, 'hole', (p % COLS) * TILE, TOP + Math.floor(p / COLS) * TILE);
     }
     s.graves.forEach((g, i) => this.drawGrave(x, i, g));
     // numbers last; on a slab they move to the corner so the arrow stays clear
@@ -535,7 +542,7 @@ export class Scene {
     this.torchGlow += (targetGlow - this.torchGlow) * 0.08;
     const LR = Math.max(1, TORCH_RADIUS * TILE * (s.ghost ? 1 : flick) * this.torchGlow * (s.ghost ? 1 : 1 - 0.75 * fallP));
     const [tr, tg, tb] = tint as [number, number, number];
-    const targetDawn = s.revealAll ? 1 : 0;
+    const targetDawn = s.revealAll || s.lifted ? 1 : 0;
     this.dawn += (targetDawn - this.dawn) * 0.05;
     const dawn = this.dawn;
     const ambR = dawn * 1.05, ambG = dawn * 0.98, ambB = dawn * 0.9;
@@ -584,9 +591,9 @@ export class Scene {
     const blink = (seed: number, rate: number) => hash2(Math.floor(t * rate), Math.floor(seed * 1000));
 
     // once the dark lifts, slabs pulse gently so it's clear they can be read
-    if (s.revealAll && !this.reduced && Math.sin(t * 3) > 0.2) {
+    if (s.lifted && !this.reduced && Math.sin(t * 3) > 0.2) {
       s.graves.forEach((g, i) => {
-        if (g.arrow === null) return;
+        if (g.arrow === null || g.truth === null) return;
         const X = (i % COLS) * TILE + 2, Y = TOP + Math.floor(i / COLS) * TILE + 2;
         const col: ColorKey = g.truth ? 'warm5' : 'red2';
         this.px(ctx, col, X, Y, 12, 1); this.px(ctx, col, X, Y + 11, 12, 1);
