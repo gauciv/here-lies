@@ -1,7 +1,7 @@
 // All sound is synthesised with WebAudio: no files, nothing to license, tiny.
 // Audio only starts after the player's first tap (browser autoplay rules).
 
-type Cue = 'step' | 'fall' | 'carve' | 'vote' | 'cross' | 'deny' | 'crumble' | 'revive' | 'snuff';
+type Cue = 'step' | 'fall' | 'carve' | 'vote' | 'cross' | 'deny' | 'crumble' | 'revive' | 'snuff' | 'victory';
 
 const MUTE_KEY = 'herelies:muted';
 
@@ -136,6 +136,18 @@ class Sound {
         src.connect(f).connect(g).connect(this.master);
         src.start(t, 0, 1);
         [293.66, 349.23, 440, 587.33].forEach((hz, k) => this.tone(t + 0.25 + k * 0.11, 1.4, hz, 0.06, 'sine'));
+        break;
+      }
+      case 'victory': { // a deep stone boom, a rising brassy D-major flourish, a bell shimmer
+        this.tone(t, 0.9, 73.42, 0.16, 'triangle', 55);
+        this.burst(t, 0.5, 180, 0.6, 0.2);
+        const notes = [293.66, 369.99, 440, 587.33];
+        notes.forEach((hz, k) => {
+          this.tone(t + 0.12 + k * 0.13, 0.5, hz, 0.07, 'sawtooth');
+          this.tone(t + 0.12 + k * 0.13, 0.9, hz, 0.06, 'triangle');
+        });
+        [587.33, 739.99, 880].forEach((hz) => this.tone(t + 0.7, 2.6, hz, 0.05, 'triangle'));
+        [1174.66, 1479.98, 1760].forEach((hz, k) => this.tone(t + 0.75 + k * 0.09, 1.8, hz, 0.025, 'sine'));
         break;
       }
       case 'snuff': // a candle pinched out: a short hiss and a breath of smoke
