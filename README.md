@@ -6,11 +6,15 @@ Every day, everyone on the subreddit gets the same dark dungeon to cross. You ca
 
 Built for Reddit's Game of the Day Hackathon on Devvit Web.
 
+**Play it:** [r/here_lies_daily_dev](https://www.reddit.com/r/here_lies_daily_dev/), where a new crossing is posted every day. One run takes two to five minutes.
+
+**What makes it different:** the hint system is the community. Every clue left on the board was carved by another player, and any of them may be lying. The board is still always solvable by logic alone; the slabs are a gamble on trust.
+
 ---
 
 ## The camp
 
-Every visit starts in the dark. A dwarf rests by a campfire, the only light there is, and the shadows at the edge of its glow shift as the flames move. The game's name hangs above in old blackletter, with the day's room beneath it (*The Gilded Narrows*) and its difficulty with a line about it (*Tricky: some of the dead here lie*).
+Every visit starts in the dark. A dwarf rests by a campfire, the only light there is, and the shadows at the edge of its glow shift as the flames move. The game's name hangs above in old blackletter, with the day's room beneath it (*The Gilded Narrows*).
 
 **Enter the dungeon** sets him moving: he takes up an unlit torch, lights it in the fire and carries it into the dark. A door appears only when his torch reaches it, and he steps through into the day's room. **Your map** unrolls the dwarf's hand-drawn map of the day: the day, your streak as a flame, how many have fallen and crossed (fresh each time you open it), and a rough treasure-map sketch of the room. The map shows the walls and solid rock, a red **X** where the door is, *you* at the stairs and a skull for about one in seven graves. It has no arrows, no pits and no path. Once you've finished the day's room, **Review the room** lets you look back at it with every pit and every arrow's truth revealed. The camp has its own calm music; the dungeon's is tense.
 
@@ -70,7 +74,7 @@ Every day is a different room, the same for everyone. Each week the dungeon deal
 - a caved-in corner
 - rubble from a collapse
 
-Every room also gets a name, like *The Drowned Gallery* or *The Weeping Narrows*. The name is shown on the parchment and in shared results, so players can talk about "yesterday's Drowned Gallery". Solid rock is never a pit and never a step. The rules never change; the floor plan does.
+Every room also gets a name, like *The Drowned Gallery* or *The Weeping Narrows*. The name is shown on the camp screen and in shared results, so players can talk about "yesterday's Drowned Gallery". Solid rock is never a pit and never a step. The rules never change; the floor plan does.
 
 ### A gentle weekly rhythm
 
@@ -111,7 +115,7 @@ No configuration is needed. Old posts stay playable as an archive of past days, 
 
 - **No free text.** Last words are a single carved arrow, so there is nothing to moderate.
 - **Every walk is checked on the server.** A crossing or fall only counts if it is a real chain of single steps over the day's board.
-- **One arrow per stone and per player,** and candle use, crossing, carving and sharing are protected against double-submission.
+- **One arrow shown per stone, one carving per player per day,** and candle use, crossing, carving and sharing are protected against double-submission.
 - Sharing and joining only happen when you press their buttons, following Devvit's user-action rules.
 
 ---
@@ -128,7 +132,9 @@ src/shared/   rules shared by client and server
   share.ts      spoiler-free result comment
 src/server/   Hono routes: game API, daily post scheduler, menu, install trigger
 src/client/   React UI, the pixel renderer (engine/scene.ts) and synthesized sound
-tools/        build_atlas.py: packs the CC0 tileset frames into one sprite sheet
+tools/        build_atlas.py packs the CC0 tileset frames into one sprite sheet;
+              build_extras.py, build_scroll.py and build_icon.py prepare the
+              campfire, the map scroll and the app icon from CC0 art
 ```
 
 **Commands**
@@ -145,4 +151,11 @@ tools/        build_atlas.py: packs the CC0 tileset frames into one sprite sheet
 
 ## Credits
 
-Dungeon art by **0x72**, *16x16 DungeonTileset II* (CC0). Torch, flame, gravestones, numbers, lighting and sound are original to Here Lies. Font: Pixelify Sans (SIL Open Font License). Full details in [CREDITS.md](CREDITS.md).
+Dungeon art by **0x72**, *16x16 DungeonTileset II* (CC0). Campfire by **Idylwild** and map scroll by **Chloe Wolfe** (both CC0). Torch, flame, grave slabs, arrows, ghost, candles, numbers, lighting and all sound are original to Here Lies. Fonts: Pixelify Sans, Jacquard 24 and Caveat (SIL Open Font License). Full details in [CREDITS.md](CREDITS.md).
+
+---
+
+## Notes for judges
+
+- **Sharing and joining:** Devvit runs user actions as the player only once an app is approved, and hackathon apps must stay unpublished. Until then, a shared result is posted by the app's account (the comment names the player, so it reads correctly either way), and **Join** opens the subreddit so you can join with one tap there.
+- **The board is the same for everyone today.** Arrows you meet were carved by other players (and by the three nameless *forgotten* dead seeded each morning, so the first visitor of the day still has slabs to doubt).
