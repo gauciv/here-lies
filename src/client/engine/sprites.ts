@@ -25,22 +25,39 @@ const build = (rows: readonly string[], legend: Legend): Sprite => {
   return { w, h, canvas };
 };
 
-// ── grave stone, outlined to sit with the tileset's chunky style ────────────
-const STONE_ROWS = [
-  '...oooo...',
-  '..oSSSSo..',
-  '.oSSSSSSo.',
-  '.oSSSkSSo.',
-  '.oSSkkkSo.',
-  '.oSSSkSSo.',
-  '.oSSSkSSo.',
-  '.oSSSSSSo.',
-  '.oSSSSShho',
-  '.ohhhhhhho',
-  'oooooooooo',
+// ── grave slab: a flat ledger stone set into the floor ──────────────────────
+const SLAB_ROWS = [
+  '.oooooooooo.',
+  'oHHHHHHHHHHo',
+  'oHLLLLLLLLMo',
+  'oHLLLLLLLLMo',
+  'oHLLLLLLLLMo',
+  'oHLLLLLLLLMo',
+  'oHLLLLLLLLMo',
+  'oHLLLLLLLLMo',
+  'oHLLLLLLLLMo',
+  'oHLLLLLLLLMo',
+  'oMMMMMMMMMMo',
+  '.oooooooooo.',
 ] as const;
-const STONE_LEGEND: Legend = { o: 'ink', S: 'stone8', h: 'stone6', k: 'stone5' };
-const STONE_MINE_LEGEND: Legend = { o: 'ink', S: 'bone2', h: 'bone1', k: 'lit3' };
+const SLAB_LEGEND: Legend = { o: 'ink', H: 'pst4', L: 'pst3', M: 'pst2' };
+const SLAB_MINE_LEGEND: Legend = { o: 'ink', H: 'bone3', L: 'bone2', M: 'bone1' };
+
+// ── arrows: drawn for up and up-right, rotated for the other six ────────────
+const ARROW_UP = ['...#...', '..###..', '.#####.', '...#...', '...#...', '...#...', '...#...'] as const;
+const ARROW_UP_RIGHT = ['...####', '.....##', '....#.#', '...#..#', '..#....', '.#.....', '#......'] as const;
+
+const rotate = (rows: readonly string[]): string[] => {
+  const n = rows.length;
+  return Array.from({ length: n }, (_, y) => Array.from({ length: n }, (_, x) => rows[n - 1 - x]![y]).join(''));
+};
+
+/** Arrow rows for a direction: 0 up, clockwise through 7 up-left. */
+export const arrowRows = (dir: number): string[] => {
+  let rows: string[] = [...(dir % 2 === 0 ? ARROW_UP : ARROW_UP_RIGHT)];
+  for (let k = 0; k < Math.floor(dir / 2); k++) rows = rotate(rows);
+  return rows;
+};
 
 // ── 3x5 digits ──────────────────────────────────────────────────────────────
 const DIGITS: Record<number, readonly string[]> = {
@@ -55,8 +72,9 @@ const DIGITS: Record<number, readonly string[]> = {
 };
 
 export type Sprites = {
-  stone: Sprite;
-  stoneMine: Sprite;
+  slab: Sprite;
+  slabMine: Sprite;
+  arrow: (dir: number, color: ColorKey) => Sprite;
   digit: (n: number, color: ColorKey) => Sprite;
 };
 
@@ -64,19 +82,17 @@ let sprites: Sprites | null = null;
 
 export const getSprites = (): Sprites => {
   if (sprites) return sprites;
-  const digitCache = new Map<string, Sprite>();
+  const cache = new Map<string, Sprite>();
+  const cached = (key: string, make: () => Sprite): Sprite => {
+    let s = cache.get(key);
+    if (!s) { s = make(); cache.set(key, s); }
+    return s;
+  };
   sprites = {
-    stone: build(STONE_ROWS, STONE_LEGEND),
-    stoneMine: build(STONE_ROWS, STONE_MINE_LEGEND),
-    digit: (n, color) => {
-      const k = `${n}:${color}`;
-      let s = digitCache.get(k);
-      if (!s) {
-        s = build(DIGITS[n] ?? DIGITS[8]!, { '#': color });
-        digitCache.set(k, s);
-      }
-      return s;
-    },
+    slab: build(SLAB_ROWS, SLAB_LEGEND),
+    slabMine: build(SLAB_ROWS, SLAB_MINE_LEGEND),
+    arrow: (dir, color) => cached(`a${dir}:${color}`, () => build(arrowRows(dir), { '#': color })),
+    digit: (n, color) => cached(`d${n}:${color}`, () => build(DIGITS[n] ?? DIGITS[8]!, { '#': color })),
   };
   return sprites;
 };

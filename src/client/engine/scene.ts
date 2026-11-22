@@ -15,6 +15,8 @@ export const SCENE_W = COLS * TILE;
 export const SCENE_H = TOP + ROWS * TILE + BOTTOM;
 
 export type GraveView = {
+  /** the most trusted carved arrow, or null if nobody carved yet */
+  arrow: number | null;
   falls: number;
   honest: number;
   liar: number;
@@ -29,6 +31,8 @@ export type SceneState = {
   revealed: ReadonlySet<number>;
   player: Cell;
   graves: ReadonlyMap<number, GraveView>;
+  /** pits this player fell into: their own knowledge, shown as holes */
+  knownPits: ReadonlySet<number>;
   phase: Phase;
   /** the dark has lifted (crossed, or out of candles): show the whole board */
   revealAll: boolean;
@@ -42,6 +46,7 @@ export const isLit = (player: Cell, cell: Cell): boolean =>
   Math.hypot(player.c - cell.c, player.r - cell.r) <= TORCH_REACH;
 
 export const isKnownLiar = (g: GraveView): boolean => g.honest + g.liar >= 3 && g.liar > g.honest * 1.5;
+export const isTrusted = (g: GraveView): boolean => g.honest + g.liar >= 3 && g.honest > g.liar * 2;
 
 export type SceneEvents = {
   onFallDone?: () => void;
@@ -190,13 +195,6 @@ export class Scene {
     x.restore();
   }
 
-  /** the 6×6 skull inside the tileset's 16×16 skull frame */
-  private skull(x: CanvasRenderingContext2D, dx: number, dy: number): void {
-    if (!this.atlas) return;
-    const [sx, sy] = FRAMES.skull;
-    x.drawImage(this.atlas, sx + 5, sy + 7, 6, 6, dx, dy, 6, 6);
-  }
-
   private px(x: CanvasRenderingContext2D, color: ColorKey, px: number, py: number, w = 1, h = 1): void {
     x.fillStyle = C[color];
     x.fillRect(px, py, w, h);
@@ -205,8 +203,8 @@ export class Scene {
   // ── static layer: walls, floor, numbers, graves (rebuilt only on change) ───
   private ensureLayer(s: SceneState, doorOpen: boolean): void {
     if (!this.atlas) return;
-    let key = `${s.board.day}|${doorOpen ? 1 : 0}|${[...s.revealed].sort((a, b) => a - b).join(',')}|`;
-    s.graves.forEach((g, i) => { key += `${i}:${g.falls}:${g.honest}:${g.liar}:${g.carved ? 1 : 0}:${g.mine ? 1 : 0};`; });
+    let key = `${s.board.day}|${doorOpen ? 1 : 0}|${[...s.revealed].sort((a, b) => a - b).join(',')}|${[...s.knownPits].join(',')}|`;
+    s.graves.forEach((g, i) => { key += `${i}:${g.arrow}:${g.falls}:${g.honest}:${g.liar}:${g.mine ? 1 : 0};`; });
     if (key === this.layerKey) return;
     this.layerKey = key;
     const x = this.lctx;
@@ -218,11 +216,13 @@ export class Scene {
       for (let c = 0; c < COLS; c++) {
         const variant = rand() < 0.6 ? 0 : 1 + Math.floor(rand() * 7);
         this.frameOf(x, FLOORS[variant] ?? 'floor_1', c * TILE, TOP + r * TILE);
-        if (s.revealed.has(idx(c, r))) this.drawClue(x, s.board, c, r);
       }
     // entrance stairs below the start stone
     this.frameOf(x, 'floor_stairs', 3 * TILE, TOP + ROWS * TILE);
+    for (const p of s.knownPits) this.frameOf(x, 'hole', (p % COLS) * TILE, TOP + Math.floor(p / COLS) * TILE);
     s.graves.forEach((g, i) => this.drawGrave(x, i, g));
+    // numbers last; on a slab they move to the corner so the arrow stays clear
+    for (const i of s.revealed) this.drawClue(x, s.board, i % COLS, Math.floor(i / COLS), s.graves.has(i));
   }
 
   private drawWall(x: CanvasRenderingContext2D, doorOpen: boolean): void {
@@ -237,10 +237,10 @@ export class Scene {
     this.frameOf(x, 'doors_frame_right', DOOR_X + 32, 0);
   }
 
-  private drawClue(x: CanvasRenderingContext2D, board: Board, c: number, r: number): void {
+  private drawClue(x: CanvasRenderingContext2D, board: Board, c: number, r: number, onSlab: boolean): void {
     const n = clue(board, c, r);
     if (n === 0) return;
-    const X = c * TILE, Y = TOP + r * TILE;
+    const X = c * TILE + (onSlab ? -5 : 0), Y = TOP + r * TILE + (onSlab ? -4 : 0);
     const sp = getSprites();
     const col: ColorKey = n >= 4 ? 'red2' : n === 3 ? 'warm4' : 'bone3';
     const dark = sp.digit(n, 'ink').canvas;
@@ -248,24 +248,24 @@ export class Scene {
     x.drawImage(sp.digit(n, col).canvas, X + 6, Y + 5);
   }
 
+  /** A flat slab on the stone a wanderer fell from, carved with their arrow. */
   private drawGrave(x: CanvasRenderingContext2D, i: number, g: GraveView): void {
     const c = i % COLS, r = Math.floor(i / COLS);
-    const X = c * TILE, Y = TOP + r * TILE;
-    this.frameOf(x, 'hole', X, Y);
+    const X = c * TILE + 2, Y = TOP + r * TILE + 2;
     const sp = getSprites();
-    x.drawImage((g.mine ? sp.stoneMine : sp.stone).canvas, X + 3, Y + 2);
-    // one skull per extra death (up to 3), piled at the foot of the stone
-    const extra = Math.min(3, g.falls - 1);
-    const spots: readonly (readonly [number, number])[] = [[X, Y + 10], [X + 10, Y + 10], [X, Y + 5]];
-    for (let k = 0; k < extra; k++) {
-      const [sx, sy] = spots[k]!;
-      this.skull(x, sx, sy);
+    x.drawImage((g.mine ? sp.slabMine : sp.slab).canvas, X, Y);
+    // the more who fell from here, the more the slab cracks
+    if (g.falls >= 2) {
+      this.px(x, 'ink', X + 9, Y + 1, 1, 2); this.px(x, 'ink', X + 8, Y + 3, 1, 1); this.px(x, 'ink', X + 9, Y + 4, 1, 1);
     }
-    if (isKnownLiar(g)) {
-      for (let k = 0; k < 4; k++) {
-        this.px(x, 'red2', X + 5 + k, Y + 5 + k);
-        this.px(x, 'red2', X + 8 - k, Y + 5 + k);
-      }
+    if (g.falls >= 3) {
+      this.px(x, 'ink', X + 1, Y + 8, 2, 1); this.px(x, 'ink', X + 3, Y + 9, 1, 1);
+      this.px(x, 'void0', X + 10, Y + 9, 1, 2); this.px(x, 'void0', X + 9, Y + 10, 1, 1);
+    }
+    if (g.arrow !== null) {
+      const col: ColorKey = isKnownLiar(g) ? 'red2' : isTrusted(g) ? 'warm4' : 'pst1';
+      if (col !== 'pst1') x.drawImage(sp.arrow(g.arrow, 'ink').canvas, X + 3, Y + 3); // outline for coloured arrows
+      x.drawImage(sp.arrow(g.arrow, col).canvas, X + 2, Y + 2);
     }
   }
 
@@ -408,8 +408,7 @@ export class Scene {
       const pulse = this.reduced ? 1 : 0.5 + 0.5 * Math.sin(t * 4);
       const col: ColorKey = pulse > 0.5 ? 'warm5' : 'warm3';
       for (const n of neighbors(s.player.c, s.player.r)) {
-        const g = s.graves.get(idx(n.c, n.r));
-        if (g && g.carved) continue;
+        if (s.knownPits.has(idx(n.c, n.r))) continue;
         const X = n.c * TILE, Y = TOP + n.r * TILE, e = TILE - 2;
         this.px(ctx, col, X + 1, Y + 1, 2, 1); this.px(ctx, col, X + 1, Y + 1, 1, 2);
         this.px(ctx, col, X + e - 1, Y + 1, 2, 1); this.px(ctx, col, X + e, Y + 1, 1, 2);

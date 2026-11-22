@@ -4,6 +4,11 @@
 
 export const C = {
   ink: '#222222', // outline colour shared with the 0x72 tileset
+  // tileset stone ramp (0x72 DungeonTileset II)
+  pst1: '#483b3a',
+  pst2: '#775c55',
+  pst3: '#aa8d7a',
+  pst4: '#d3bfa9',
   void0: '#06070b',
   void1: '#0c0f16',
   void2: '#141922',
