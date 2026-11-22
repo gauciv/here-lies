@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { COLS, ROWS, generateBoard, idx, isOpen } from '../../shared/board';
 
-const CELL = 22;
+const CELL = 30;
 const PAD = 12;
 const W = COLS * CELL + PAD * 2;
 const H = ROWS * CELL + PAD * 2 + 14;

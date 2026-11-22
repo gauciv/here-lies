@@ -50,9 +50,9 @@ CampCanvas.displayName = 'CampCanvas';
 type Snapshot = { day: DayDto; graves: number[] };
 
 /**
- * The dwarf's guide to today's room, on a scroll that unrolls when asked for:
- * the day, how hard it is, a rough map, and how many have fallen or crossed.
- * It's read fresh every time it opens.
+ * The dwarf's map of today's room, on a scroll that unrolls when asked for:
+ * the day, your streak, a rough sketch of the room, and how many have fallen
+ * or crossed. It's read fresh every time it opens.
  */
 const Record = ({ day, me }: { day: DayDto | null; me: MeDto | null }) => {
   const [snap, setSnap] = useState<Snapshot | null>(null);
@@ -65,10 +65,9 @@ const Record = ({ day, me }: { day: DayDto | null; me: MeDto | null }) => {
     return () => { alive = false; };
   }, []);
   const d = snap?.day ?? day;
-  const diff = d ? difficultyOf(d.day) : null;
   const streak = me?.streak ?? 0;
   return (
-    <section className="scroll" id="camp-record" aria-label="Your guide to today's room">
+    <section className="scroll" id="camp-map" aria-label="Your map of today's room">
       <div className="scroll-sheet">
         <div className="scroll-inner">
           <header className="rec-head">
@@ -78,14 +77,7 @@ const Record = ({ day, me }: { day: DayDto | null; me: MeDto | null }) => {
               <span>{streak}</span>
             </p>
           </header>
-          {diff && (
-            <div className="rec-tier">
-              <p className={`rec-tier-name rec-${diff.name.toLowerCase()}`}>{diff.name}</p>
-              <p className="rec-hint">{diff.hint}</p>
-            </div>
-          )}
           <figure className="rec-map">
-            {d && <figcaption>{d.room}</figcaption>}
             {d && snap ? <RoomMap day={d.day} graves={snap.graves} /> : <div className="room-map room-map-wait" />}
           </figure>
           {d && (
@@ -109,9 +101,19 @@ export const Standby = forwardRef<StandbyHandle, {
 }>(({ day, me, busy, onEnter, onReview, compact = false }, ref) => {
   const [open, setOpen] = useState(false);
   const finished = !!me && (me.crossed || me.candles <= 0) && me.uncarved === null;
+  const diff = day ? difficultyOf(day.day) : null;
   return (
     <div className={`standby${compact ? ' standby-compact' : ''}`}>
-      <h1 className="camp-title">Here Lies</h1>
+      <header className="camp-head">
+        <h1 className="camp-title">Here Lies</h1>
+        {day && <p className="camp-room">{day.room}</p>}
+        {diff && (
+          <p className="camp-tier">
+            <b className={`camp-tier-name tier-${diff.name.toLowerCase()}`}>{diff.name}</b>
+            <span className="camp-hint">{diff.hint}</span>
+          </p>
+        )}
+      </header>
       <div className="camp-middle">
         <CampCanvas ref={ref} maxScale={compact ? 3 : 4} />
         {open && <Record day={day} me={me} />}
@@ -122,8 +124,8 @@ export const Standby = forwardRef<StandbyHandle, {
         ) : (
           <button className="btn btn-share btn-enter" disabled={busy || !me} onClick={onEnter}>Enter the dungeon</button>
         )}
-        <button className="btn btn-record" aria-expanded={open} aria-controls="camp-record" onClick={() => setOpen(!open)}>
-          {open ? 'Hide record' : 'Your record'}
+        <button className="btn btn-record" aria-expanded={open} aria-controls="camp-map" onClick={() => setOpen(!open)}>
+          {open ? 'Hide map' : 'Your map'}
         </button>
       </div>
     </div>

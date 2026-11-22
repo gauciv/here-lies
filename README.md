@@ -10,9 +10,9 @@ Built for Reddit's Game of the Day Hackathon on Devvit Web.
 
 ## The camp
 
-Every visit starts in the dark. A dwarf rests by a campfire, the only light there is, and the shadows at the edge of its glow shift as the flames move. The game's name hangs above in old blackletter, and nothing else is on screen.
+Every visit starts in the dark. A dwarf rests by a campfire, the only light there is, and the shadows at the edge of its glow shift as the flames move. The game's name hangs above in old blackletter, with the day's room beneath it (*The Gilded Narrows*) and its difficulty with a line about it (*Tricky: some of the dead here lie*).
 
-**Enter the dungeon** sets him moving: he takes up an unlit torch, lights it in the fire and carries it into the dark. A door appears only when his torch reaches it, and he steps through into the day's room. **Your record** unrolls the dwarf's guide to the day, written by hand: the day, its difficulty and a line about it, your streak as a flame, how many have fallen and crossed (fresh each time you open it), and a rough treasure map of the room. The map shows the walls and solid rock, a red **X** where the door is, *you* at the stairs and a skull for about one in seven graves. It has no arrows, no pits and no path. Once you've finished the day's room, **Review the room** lets you look back at it with every pit and every arrow's truth revealed. The camp has its own calm music; the dungeon's is tense.
+**Enter the dungeon** sets him moving: he takes up an unlit torch, lights it in the fire and carries it into the dark. A door appears only when his torch reaches it, and he steps through into the day's room. **Your map** unrolls the dwarf's hand-drawn map of the day: the day, your streak as a flame, how many have fallen and crossed (fresh each time you open it), and a rough treasure-map sketch of the room. The map shows the walls and solid rock, a red **X** where the door is, *you* at the stairs and a skull for about one in seven graves. It has no arrows, no pits and no path. Once you've finished the day's room, **Review the room** lets you look back at it with every pit and every arrow's truth revealed. The camp has its own calm music; the dungeon's is tense.
 
 ## How to play
 
