@@ -1,9 +1,10 @@
-import { CANDLES_PER_DAY, difficultyOf } from '../../shared/board';
+import { difficultyOf } from '../../shared/board';
 import { dateLabel } from './format';
 import type { DayDto, MeDto } from '../../shared/api';
 import { PixelIcon } from './PixelIcon';
 import { useState } from 'react';
-import { CANDLE_LEGEND, CANDLE_LIT, CANDLE_OUT, SPEAKER_LEGEND, SPEAKER_OFF, SPEAKER_ON } from './icons';
+import { SPEAKER_LEGEND, SPEAKER_OFF, SPEAKER_ON } from './icons';
+import { Candles } from './Candles';
 import { sound } from '../engine/sound';
 
 const MuteButton = () => {
@@ -32,11 +33,7 @@ export const Hud = ({ day, me, onHelp }: { day: DayDto; me: MeDto; onHelp: () =>
       <div className="hud-row">
         <button className="help" aria-label="How to play" onClick={onHelp}>?</button>
         <MuteButton />
-        <div className="candles" aria-label={`${me.candles} of ${CANDLES_PER_DAY} candles left`}>
-        {Array.from({ length: CANDLES_PER_DAY }, (_, k) => (
-          <PixelIcon key={k} rows={k < me.candles ? CANDLE_LIT : CANDLE_OUT} legend={CANDLE_LEGEND} size={3} />
-        ))}
-        </div>
+        <Candles lit={me.candles} />
       </div>
       <span className="hud-sub">
         <b className="num-fallen">{day.fallen}</b> fallen · <b className="num-crossed">{day.crossed}</b> crossed

@@ -1,7 +1,7 @@
 // All sound is synthesised with WebAudio: no files, nothing to license, tiny.
 // Audio only starts after the player's first tap (browser autoplay rules).
 
-type Cue = 'step' | 'fall' | 'carve' | 'vote' | 'cross' | 'deny' | 'crumble';
+type Cue = 'step' | 'fall' | 'carve' | 'vote' | 'cross' | 'deny' | 'crumble' | 'revive' | 'snuff';
 
 const MUTE_KEY = 'herelies:muted';
 
@@ -118,6 +118,29 @@ class Sound {
           this.burst(at, 0.03 + Math.random() * 0.03, 900 + Math.random() * 1600, 2.5, 0.12 + Math.random() * 0.1, 'bandpass');
         }
         this.burst(t + 0.15, 0.6, 500, 0.5, 0.12);
+        break;
+      case 'revive': { // an airy rush upward, then a soft rising chime
+        const ctxN = this.ctx;
+        if (!ctxN || !this.master || !this.noise) break;
+        const src = ctxN.createBufferSource();
+        src.buffer = this.noise;
+        const f = ctxN.createBiquadFilter();
+        f.type = 'bandpass';
+        f.Q.value = 1.4;
+        f.frequency.setValueAtTime(300, t);
+        f.frequency.exponentialRampToValueAtTime(2400, t + 0.8);
+        const g = ctxN.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.14, t + 0.35);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+        src.connect(f).connect(g).connect(this.master);
+        src.start(t, 0, 1);
+        [293.66, 349.23, 440, 587.33].forEach((hz, k) => this.tone(t + 0.25 + k * 0.11, 1.4, hz, 0.06, 'sine'));
+        break;
+      }
+      case 'snuff': // a candle pinched out: a short hiss and a breath of smoke
+        this.burst(t, 0.18, 5200, 0.8, 0.12, 'highpass');
+        this.burst(t + 0.05, 0.35, 900, 0.7, 0.05);
         break;
       case 'deny':
         this.tone(t, 0.12, 180, 0.08, 'square', 140);
