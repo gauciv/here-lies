@@ -44,8 +44,8 @@ const SLAB_LEGEND: Legend = { o: 'ink', H: 'pst4', L: 'pst3', M: 'pst2' };
 const SLAB_MINE_LEGEND: Legend = { o: 'ink', H: 'bone3', L: 'bone2', M: 'bone1' };
 
 // ── arrows: drawn for up and up-right, rotated for the other six ────────────
-const ARROW_UP = ['...#...', '..###..', '.#####.', '...#...', '...#...', '...#...', '...#...'] as const;
-const ARROW_UP_RIGHT = ['...####', '.....##', '....#.#', '...#..#', '..#....', '.#.....', '#......'] as const;
+const ARROW_UP = ['...#...', '..###..', '.#####.', '#######', '..###..', '..###..', '..###..'] as const;
+const ARROW_UP_RIGHT = ['..#####', '...####', '....###', '...####', '..###.#', '.###...', '###....'] as const;
 
 const rotate = (rows: readonly string[]): string[] => {
   const n = rows.length;
