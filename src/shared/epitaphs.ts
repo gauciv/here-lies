@@ -1,7 +1,7 @@
 // Last words are an arrow carved into the slab where you last stood: "I stepped
 // this way and fell". It can be the truth or a lie. No free text means nothing
 // to moderate, and an arrow reads at a glance in torchlight.
-import { inBounds, type Cell } from './grid';
+import { cellOf, idx, inBounds, type Board, type Cell } from './grid';
 
 /** 0 up, then clockwise: 1 up-right, 2 right, 3 down-right, 4 down, 5 down-left, 6 left, 7 up-left */
 export type Direction = number;
@@ -41,6 +41,12 @@ export const directionBetween = (from: Cell, to: Cell): Direction | null => {
   return d >= 0 ? d : null;
 };
 
+/** An arrow tells the truth when the stone it points at is a pit. */
+export const arrowIsTrue = (board: Board, stone: number, arrow: Direction): boolean => {
+  const p = pointedCell(cellOf(stone), arrow);
+  return inBounds(p.c, p.r) && board.pits[idx(p.c, p.r)] === true;
+};
+
 /** Author id of the dungeon's nameless dead, seeded so no day starts empty. */
 export const FORGOTTEN = '~forgotten';
 export const isForgotten = (user: string): boolean => user === FORGOTTEN;
@@ -48,12 +54,3 @@ export const isForgotten = (user: string): boolean => user === FORGOTTEN;
 /** Placeholder for logged-out viewers. '~' can't appear in a Reddit username. */
 export const ANONYMOUS = '~anonymous';
 export const isAnonymous = (user: string): boolean => !user || user.startsWith('~');
-
-export type Verdict = 'trusted' | 'liar' | 'disputed' | 'unjudged';
-
-export const verdictOf = (honest: number, liar: number): Verdict => {
-  if (honest + liar < 3) return 'unjudged';
-  if (liar > honest * 1.5) return 'liar';
-  if (honest > liar * 2) return 'trusted';
-  return 'disputed';
-};

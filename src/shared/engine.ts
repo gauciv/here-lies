@@ -1,22 +1,16 @@
 // Authoritative game rules over a tiny key-value interface. The Devvit server
 // runs this against Redis; the local preview runs it against an in-memory map.
+//
+// Graves: a fall lays a slab on the last safe stone the walker stood on. The
+// first to fall from a stone carves its one arrow (truth or lie), and each
+// player carves at most once per day. Arrows are judged by the game itself:
+// it counts who an arrow saved (stepped off its stone safely when it told the
+// truth) and who it fooled (fell from its stone when it lied).
 import { CANDLES_PER_DAY, ROWS, cellOf, dayNumber, generateBoard, idx, judgeRun, mulberry32, neighbors, type Cell } from './board';
-import { FORGOTTEN, directionBetween, isAnonymous, isDirection, validDirections } from './epitaphs';
+import { FORGOTTEN, arrowIsTrue, directionBetween, isAnonymous, isDirection, validDirections } from './epitaphs';
 import { canShare, shareText } from './share';
 import { pioneerFlair, pioneerScore, type Flair } from './pioneer';
-import type {
-  CarveResponse,
-  CrossResponse,
-  DayDto,
-  EpitaphDto,
-  FallResponse,
-  GraveDto,
-  GraveResponse,
-  InitResponse,
-  MeDto,
-  Vote,
-  VoteResponse,
-} from './api';
+import type { CarveResponse, CrossResponse, DayDto, EpitaphDto, FallResponse, GraveDto, InitResponse, MeDto, MyArrowDto } from './api';
 
 export type Store = {
   get(key: string): Promise<string | undefined>;
@@ -37,20 +31,21 @@ export type Store = {
 export class GameError extends Error {}
 
 /** Bump when the stored shape changes, so old days don't mix with new rules. */
-const NS = 'v2:';
+const NS = 'v3:';
 
 const K = {
   stats: (d: number) => `${NS}d:${d}:stats`,
   /** deaths per pit (server-only; drives the pioneer score) */
   falls: (d: number) => `${NS}d:${d}:falls`,
-  /** epitaph ids carved on the slab at stone i, by trust */
-  cell: (d: number, i: number) => `${NS}d:${d}:slab:${i}`,
   /** deaths per slab stone */
   slabFalls: (d: number) => `${NS}d:${d}:slabfalls`,
+  /** stone → epitaph id of its single arrow */
+  slabArrow: (d: number) => `${NS}d:${d}:slabarrow`,
+  /** stone → claim counter (first claimant carves) */
+  slabClaim: (d: number) => `${NS}d:${d}:slabclaim`,
   ep: (d: number, id: string) => `${NS}d:${d}:ep:${id}`,
   epSeq: (d: number) => `${NS}d:${d}:epseq`,
   user: (d: number, u: string) => `${NS}d:${d}:u:${u}`,
-  votes: (d: number, u: string) => `${NS}d:${d}:votes:${u}`,
   streak: (u: string) => `u:${u}:streak`,
   seededCells: (d: number) => `${NS}d:${d}:seeded`,
 };
@@ -79,8 +74,6 @@ export const parsePath = (v: unknown): Cell[] => {
   return v.map((p) => ({ c: p.c, r: p.r }));
 };
 
-const epScore = (honest: number, liar: number): number => honest - liar * 1.5;
-
 export class Engine {
   private readonly store: Store;
 
@@ -91,6 +84,20 @@ export class Engine {
   private async dayDto(day: number): Promise<DayDto> {
     const s = await this.store.hGetAll(K.stats(day));
     return { day, fallen: num(s.fallen), crossed: num(s.crossed) };
+  }
+
+  private async myArrow(day: number, epId: string | undefined): Promise<MyArrowDto | null> {
+    if (!epId) return null;
+    const e = await this.store.hGetAll(K.ep(day, epId));
+    if (!e.user) return null;
+    const arrow = num(e.arrow);
+    return {
+      stone: num(e.i),
+      arrow,
+      truthful: arrowIsTrue(generateBoard(day), num(e.i), arrow),
+      saved: num(e.saved),
+      fooled: num(e.fooled),
+    };
   }
 
   private async me(day: number, user: string): Promise<MeDto> {
@@ -109,13 +116,13 @@ export class Engine {
       streak: last >= day - 1 ? num(st.count) : 0,
       shared: u.shared === '1',
       pioneer: u.pioneer ? num(u.pioneer) : null,
+      myArrow: await this.myArrow(day, u.myEp),
     };
   }
 
-  private async epitaph(day: number, id: string, viewer: string): Promise<EpitaphDto | null> {
+  private async epitaph(day: number, id: string): Promise<EpitaphDto | null> {
     const e = await this.store.hGetAll(K.ep(day, id));
     if (!e.user) return null;
-    const v = await this.store.hGet(K.votes(day, viewer), id);
     const arrow = num(e.arrow);
     return {
       id,
@@ -123,32 +130,35 @@ export class Engine {
       arrow: isDirection(arrow) ? arrow : 0,
       step: num(e.step),
       at: num(e.at),
-      honest: num(e.honest),
-      liar: num(e.liar),
-      myVote: v === 'honest' || v === 'liar' ? v : null,
+      saved: num(e.saved),
+      fooled: num(e.fooled),
     };
   }
 
   private async grave(day: number, i: number, viewer: string): Promise<GraveDto> {
-    const [falls, topIds, carved, mineList] = await Promise.all([
+    const [falls, epId, mineList] = await Promise.all([
       this.store.hGet(K.slabFalls(day), String(i)),
-      this.store.zTop(K.cell(day, i), 1),
-      this.store.zCard(K.cell(day, i)),
+      this.store.hGet(K.slabArrow(day), String(i)),
       this.store.hGet(K.user(day, viewer), 'diedFrom'),
     ]);
-    const topId = topIds[0];
     return {
       i,
       falls: num(falls),
-      top: topId ? await this.epitaph(day, topId, viewer) : null,
-      carved,
+      top: epId ? await this.epitaph(day, epId) : null,
       mine: parseList(mineList).includes(i),
     };
   }
 
+  private async writeArrow(day: number, stone: number, fields: Record<string, string>): Promise<string> {
+    const id = String(await this.store.incrBy(K.epSeq(day), 1));
+    await this.store.hSet(K.ep(day, id), { ...fields, i: String(stone), saved: '0', fooled: '0' });
+    await this.store.hSet(K.slabArrow(day), { [String(stone)]: id });
+    return id;
+  }
+
   /**
-   * Lay a few nameless graves on a fresh day so the first players already meet
-   * last words to trust or doubt. They never count toward the day's "fallen".
+   * Lay a few nameless slabs on a fresh day so the first players already meet
+   * arrows to trust or doubt. They never count toward the day's "fallen".
    */
   private async ensureSeeded(day: number): Promise<void> {
     if (!(await this.store.hSetNX(K.stats(day), 'seeded', '1'))) return;
@@ -171,7 +181,6 @@ export class Engine {
     for (const pit of candidates) {
       if (used.size >= 3) break;
       const p = cellOf(pit);
-      // the slab goes on a safe neighbour the forgotten soul stepped from
       const stones = neighbors(p.c, p.r)
         .map((n) => idx(n.c, n.r))
         .filter((n) => !board.pits[n] && !used.has(n) && n !== idx(board.start.c, board.start.r));
@@ -179,20 +188,10 @@ export class Engine {
       const stone = stones[Math.floor(rand() * stones.length)]!;
       used.add(stone);
       const truth = directionBetween(cellOf(stone), p) ?? 0;
-      const others = validDirections(cellOf(stone)).filter((d) => d !== truth);
+      const others = validDirections(cellOf(stone)).filter((d) => !arrowIsTrue(board, stone, d));
       const arrow = rand() < 0.6 || !others.length ? truth : others[Math.floor(rand() * others.length)]!;
-      const id = String(await this.store.incrBy(K.epSeq(day), 1));
-      await this.store.hSet(K.ep(day, id), {
-        user: FORGOTTEN,
-        i: String(stone),
-        pit: String(pit),
-        arrow: String(arrow),
-        step: '0',
-        at: String(at),
-        honest: '0',
-        liar: '0',
-      });
-      await this.store.zAdd(K.cell(day, stone), id, epScore(0, 0) + at / 1e13);
+      await this.store.hIncrBy(K.slabClaim(day), String(stone), 1);
+      await this.writeArrow(day, stone, { user: FORGOTTEN, arrow: String(arrow), step: '0', at: String(at) });
       await this.store.hIncrBy(K.slabFalls(day), String(stone), 1);
       await this.store.hIncrBy(K.falls(day), String(pit), 1);
       await this.store.hSet(K.seededCells(day), { [String(pit)]: '1' });
@@ -211,6 +210,11 @@ export class Engine {
     return { type: 'init', postId, day: dayDto, graves, me };
   }
 
+  /**
+   * Remember the stones a walker revealed, and let the arrows they passed
+   * take credit: a truthful arrow saved them if they stepped off its stone
+   * safely; a lying arrow fooled them if they fell from its stone.
+   */
   private async recordPath(day: number, user: string, path: Cell[]): Promise<void> {
     const board = generateBoard(day);
     const u = await this.store.hGetAll(K.user(day, user));
@@ -218,6 +222,23 @@ export class Engine {
     revealed.add(idx(board.start.c, board.start.r));
     for (const p of path) if (!board.pits[idx(p.c, p.r)]) revealed.add(idx(p.c, p.r));
     await this.store.hSet(K.user(day, user), { revealed: JSON.stringify([...revealed]) });
+
+    const arrows = await this.store.hGetAll(K.slabArrow(day));
+    const credited = new Set<string>();
+    for (let k = 0; k < path.length; k++) {
+      const from = k === 0 ? board.start : path[k - 1]!;
+      const to = path[k]!;
+      const epId = arrows[String(idx(from.c, from.r))];
+      if (!epId || credited.has(epId)) continue;
+      const e = await this.store.hGetAll(K.ep(day, epId));
+      if (!e.user || e.user === user) continue;
+      const truthful = arrowIsTrue(board, num(e.i), num(e.arrow));
+      const fell = board.pits[idx(to.c, to.r)] === true;
+      if (truthful && !fell) await this.store.hIncrBy(K.ep(day, epId), 'saved', 1);
+      else if (!truthful && fell) await this.store.hIncrBy(K.ep(day, epId), 'fooled', 1);
+      else continue;
+      credited.add(epId);
+    }
   }
 
   private async assertCanWalk(day: number, user: string): Promise<MeDto> {
@@ -225,18 +246,32 @@ export class Engine {
     const me = await this.me(day, user);
     if (me.crossed) throw new GameError('You already crossed today');
     if (me.candles <= 0) throw new GameError('Your candles are spent for today');
-    if (me.uncarved !== null) throw new GameError('Carve your last words first');
+    if (me.uncarved !== null) throw new GameError('Carve your arrow first');
     return me;
+  }
+
+  /** Atomically: is this the player's first carving today, on a stone nobody has claimed? */
+  private async claimCarving(day: number, user: string, stone: number): Promise<boolean> {
+    if ((await this.store.hIncrBy(K.user(day, user), 'carveClaim', 1)) > 1) {
+      await this.store.hIncrBy(K.user(day, user), 'carveClaim', -1);
+      return false;
+    }
+    if ((await this.store.hIncrBy(K.slabClaim(day), String(stone), 1)) > 1) {
+      await this.store.hIncrBy(K.user(day, user), 'carveClaim', -1); // their carving is still unused
+      return false;
+    }
+    return true;
   }
 
   async fall(day: number, user: string, rawPath: unknown): Promise<FallResponse> {
     const path = parsePath(rawPath);
     await this.assertCanWalk(day, user);
-    const outcome = judgeRun(generateBoard(day), path);
+    const board = generateBoard(day);
+    const outcome = judgeRun(board, path);
     if (outcome.kind !== 'fell') throw new GameError('That walk did not end in a pit');
     const pit = idx(outcome.at.c, outcome.at.r);
     // the slab goes where they last stood safely: the stone before the pit
-    const from = path.length >= 2 ? path[path.length - 2]! : generateBoard(day).start;
+    const from = path.length >= 2 ? path[path.length - 2]! : board.start;
     const stone = idx(from.c, from.r);
     // consume a candle atomically; concurrent requests can't overspend
     const spent = await this.store.hIncrBy(K.user(day, user), 'spent', 1);
@@ -244,6 +279,8 @@ export class Engine {
       await this.store.hIncrBy(K.user(day, user), 'spent', -1);
       throw new GameError('Your candles are spent for today');
     }
+    await this.recordPath(day, user, path);
+    const canCarve = await this.claimCarving(day, user, stone);
     const u = await this.store.hGetAll(K.user(day, user));
     const fellAt = parseList(u.fellAt);
     fellAt.push(pit);
@@ -251,9 +288,7 @@ export class Engine {
     diedFrom.push(stone);
     await Promise.all([
       this.store.hSet(K.user(day, user), {
-        uncarved: String(stone),
-        uncarvedPit: String(pit),
-        uncarvedStep: String(outcome.steps),
+        ...(canCarve ? { uncarved: String(stone), uncarvedStep: String(outcome.steps) } : {}),
         fellAt: JSON.stringify(fellAt),
         diedFrom: JSON.stringify(diedFrom),
       }),
@@ -261,7 +296,6 @@ export class Engine {
       this.store.hIncrBy(K.slabFalls(day), String(stone), 1),
       this.store.hIncrBy(K.stats(day), 'fallen', 1),
     ]);
-    await this.recordPath(day, user, path);
     const [meDto, grave, dayDto] = await Promise.all([this.me(day, user), this.grave(day, stone, user), this.dayDto(day)]);
     return { type: 'fall', me: meDto, grave, day: dayDto };
   }
@@ -271,23 +305,9 @@ export class Engine {
     const u = await this.store.hGetAll(K.user(day, user));
     if (!u.uncarved || num(u.uncarved) !== i) throw new GameError('Nothing to carve here');
     if (!validDirections(cellOf(i)).includes(arrow)) throw new GameError('That arrow points off the edge');
-    // one epitaph per fall, even under concurrent requests
-    if (!(await this.store.hSetNX(K.user(day, user), `carved:${num(u.spent)}`, '1'))) {
-      throw new GameError('Your last words are already carved');
-    }
-    const id = String(await this.store.incrBy(K.epSeq(day), 1));
-    await this.store.hSet(K.ep(day, id), {
-      user,
-      i: String(i),
-      pit: u.uncarvedPit ?? '',
-      arrow: String(arrow),
-      step: u.uncarvedStep ?? '0',
-      at: String(Date.now()),
-      honest: '0',
-      liar: '0',
-    });
-    await this.store.zAdd(K.cell(day, i), id, epScore(0, 0) + Date.now() / 1e13);
-    await this.store.hSet(K.user(day, user), { uncarved: '', uncarvedPit: '', uncarvedStep: '' });
+    if (!(await this.store.hSetNX(K.user(day, user), 'carved', '1'))) throw new GameError('Your arrow is already carved');
+    const id = await this.writeArrow(day, i, { user, arrow: String(arrow), step: u.uncarvedStep ?? '0', at: String(Date.now()) });
+    await this.store.hSet(K.user(day, user), { uncarved: '', uncarvedStep: '', myEp: id });
     const [grave, me] = await Promise.all([this.grave(day, i, user), this.me(day, user)]);
     return { type: 'carve', grave, me };
   }
@@ -331,24 +351,6 @@ export class Engine {
     return { type: 'cross', me, day: dayDto };
   }
 
-  async vote(day: number, user: string, id: string, vote: unknown): Promise<VoteResponse> {
-    if (vote !== 'honest' && vote !== 'liar') throw new GameError('Unknown vote');
-    if (isAnonymous(user)) throw new GameError('Log in to judge the dead');
-    const e = await this.store.hGetAll(K.ep(day, id));
-    if (!e.user) throw new GameError('No such epitaph');
-    if (e.user === user) throw new GameError("You can't judge your own last words");
-    const fresh = await this.store.hSetNX(K.votes(day, user), id, vote);
-    if (!fresh) throw new GameError('You already judged these words');
-    const v: Vote = vote;
-    const honest = v === 'honest' ? await this.store.hIncrBy(K.ep(day, id), 'honest', 1) : num(e.honest);
-    const liar = v === 'liar' ? await this.store.hIncrBy(K.ep(day, id), 'liar', 1) : num(e.liar);
-    const i = num(e.i);
-    await this.store.zAdd(K.cell(day, i), id, epScore(honest, liar) + num(e.at) / 1e13);
-    const [epitaph, grave] = await Promise.all([this.epitaph(day, id, user), this.grave(day, i, user)]);
-    if (!epitaph) throw new GameError('No such epitaph');
-    return { type: 'vote', epitaph, grave };
-  }
-
   /** The flair a player has earned today (only after crossing). */
   async flairFor(day: number, user: string): Promise<Flair> {
     if (isAnonymous(user)) throw new GameError('Log in to wear a title');
@@ -375,14 +377,5 @@ export class Engine {
     if (ok) await this.store.hSet(K.user(day, user), { shared: '1' });
     else await this.store.hIncrBy(K.user(day, user), 'shareClaim', -1);
     return this.me(day, user);
-  }
-
-  async graveDetail(day: number, user: string, i: number): Promise<GraveResponse> {
-    const ids = await this.store.zTop(K.cell(day, i), 12);
-    const [grave, eps] = await Promise.all([
-      this.grave(day, i, user),
-      Promise.all(ids.map((id) => this.epitaph(day, id, user))),
-    ]);
-    return { type: 'grave', grave, epitaphs: eps.filter((e): e is EpitaphDto => e !== null) };
   }
 }

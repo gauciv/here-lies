@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { COLS, START, cellOf, dayNumber, generateBoard, idx, neighbors, type Cell } from './board.ts';
-import { directionBetween, validDirections } from './epitaphs.ts';
+import { arrowIsTrue, directionBetween, validDirections } from './epitaphs.ts';
 import { Engine, GameError } from './engine.ts';
 import { MemoryStore } from './memoryStore.ts';
 
@@ -36,7 +36,7 @@ const pitPath = pathTo((c) => board.pits[idx(c.c, c.r)] === true);
 const crossPath = pathTo((c) => c.r === 0 && !board.pits[idx(c.c, c.r)]);
 const arrowFor = (stone: number): number => validDirections(cellOf(stone))[0]!;
 
-void test('fall → carve → vote → cross loop', async () => {
+void test('fall → carve → cross loop', async () => {
   const e = new Engine(new MemoryStore());
   const fell = await e.fall(DAY, 'alice', pitPath);
   assert.equal(fell.me.candles, 2);
@@ -57,12 +57,7 @@ void test('fall → carve → vote → cross loop', async () => {
   assert.equal(carved.grave.top?.arrow, truth);
   assert.equal(carved.me.uncarved, null);
 
-  const id = carved.grave.top!.id;
-  await assert.rejects(e.vote(DAY, 'alice', id, 'honest'), GameError); // no self-votes
-  const v = await e.vote(DAY, 'bob', id, 'liar');
-  assert.equal(v.epitaph.liar, 1);
-  assert.equal(v.epitaph.myVote, 'liar');
-  await assert.rejects(e.vote(DAY, 'bob', id, 'honest'), GameError); // one vote
+  assert.equal(carved.me.myArrow?.truthful, true);
 
   const crossed = await e.cross(DAY, 'alice', crossPath);
   assert.equal(crossed.me.crossed, true);
@@ -95,7 +90,7 @@ void test('candles run out after three falls', async () => {
   const e = new Engine(new MemoryStore());
   for (let k = 0; k < 3; k++) {
     const f = await e.fall(DAY, 'carol', pitPath);
-    await e.carve(DAY, 'carol', f.grave.i, arrowFor(f.grave.i));
+    if (f.me.uncarved !== null) await e.carve(DAY, 'carol', f.grave.i, arrowFor(f.grave.i));
   }
   await assert.rejects(e.fall(DAY, 'carol', pitPath), /candles/);
 });
@@ -132,13 +127,11 @@ void test('pioneer score rewards crossing before others map the pits', async () 
   assert.match(flair.text, /^Trailblazer · /);
   assert.ok(!flair.text.includes(','));
   // someone else falls into an unmarked pit: later crossers score lower
-  const f = await e.fall(DAY, 'faller', pitPath);
-  await e.carve(DAY, 'faller', f.grave.i, arrowFor(f.grave.i));
+  await e.fall(DAY, 'faller', pitPath);
   const late = await e.cross(DAY, 'late', crossPath);
   assert.ok(late.me.pioneer !== null && late.me.pioneer < 100);
   // your own falls never count against you
-  const g = await e.fall(DAY, 'solo', pitPath);
-  await e.carve(DAY, 'solo', g.grave.i, arrowFor(g.grave.i));
+  await e.fall(DAY, 'solo', pitPath);
   const solo = await e.cross(DAY, 'solo', crossPath);
   assert.equal(solo.me.pioneer, late.me.pioneer);
 });
@@ -150,6 +143,39 @@ void test('logged-out placeholders can never act, and real names are never mista
   await assert.rejects(e.claimShare(DAY, '~anonymous'), /Log in/);
   const real = await e.cross(DAY, 'anonymous', crossPath); // a real Reddit user may be called this
   assert.equal(real.me.crossed, true);
+});
+
+void test('one arrow per stone, first come; one carving per player per day', async () => {
+  const e = new Engine(new MemoryStore());
+  const first = await e.fall(DAY, 'ann', pitPath);
+  assert.equal(first.me.uncarved, first.grave.i);
+  await e.carve(DAY, 'ann', first.grave.i, arrowFor(first.grave.i));
+  // ann's second fall: she already carved today
+  const again = await e.fall(DAY, 'ann', pitPath);
+  assert.equal(again.me.uncarved, null);
+  // ben falls from the same stone: it already has an arrow
+  const ben = await e.fall(DAY, 'ben', pitPath);
+  assert.equal(ben.me.uncarved, null);
+  assert.equal(ben.grave.falls, 3);
+  assert.equal(ben.grave.top?.user, 'ann');
+  // ben's carving is still unused, so he can carve on a fresh stone later
+  const otherPit = board.pits.findIndex((p, i) => p && i !== idx(pitPath.at(-1)!.c, pitPath.at(-1)!.r) && neighbors(i % COLS, Math.floor(i / COLS)).some((n) => !board.pits[idx(n.c, n.r)]));
+  assert.ok(otherPit >= 0);
+});
+
+void test('arrows earn saved and fooled credit from later walkers', async () => {
+  const e = new Engine(new MemoryStore());
+  const lastSafe = pitPath.length >= 2 ? pitPath[pitPath.length - 2]! : START;
+  const stone = idx(lastSafe.c, lastSafe.r);
+  // a liar points at a stone that is not a pit
+  await e.fall(DAY, 'liar', pitPath);
+  const lie = validDirections(lastSafe).find((d) => !arrowIsTrue(board, stone, d))!;
+  await e.carve(DAY, 'liar', stone, lie);
+  // someone trusts it, steps off the same stone into the pit: fooled
+  await e.fall(DAY, 'victim', pitPath);
+  const init = await e.init(DAY, 'liar', 't3_x');
+  assert.equal(init.me.myArrow?.truthful, false);
+  assert.equal(init.me.myArrow?.fooled, 1);
 });
 
 void test('rejects forged runs', async () => {

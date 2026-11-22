@@ -1,8 +1,7 @@
 import type { Cell } from './board';
 import type { Direction } from './epitaphs';
 
-export type Vote = 'honest' | 'liar';
-
+/** The single arrow carved on a slab. */
 export type EpitaphDto = {
   id: string;
   user: string;
@@ -10,18 +9,18 @@ export type EpitaphDto = {
   arrow: Direction;
   step: number;
   at: number;
-  honest: number;
-  liar: number;
-  myVote: Vote | null;
+  /** walkers it warned off a real pit */
+  saved: number;
+  /** walkers who fell from its stone while it lied */
+  fooled: number;
 };
 
 /** A slab on a safe stone: wanderers stepped off it into a pit today. */
 export type GraveDto = {
   i: number;
   falls: number;
-  /** most trusted carved arrow on this slab, if any */
+  /** the slab's one arrow, carved by the first to fall from it */
   top: EpitaphDto | null;
-  carved: number;
   mine: boolean;
 };
 
@@ -29,6 +28,15 @@ export type DayDto = {
   day: number;
   fallen: number;
   crossed: number;
+};
+
+/** The arrow this player carved today, and what it did to others. */
+export type MyArrowDto = {
+  stone: number;
+  arrow: Direction;
+  truthful: boolean;
+  saved: number;
+  fooled: number;
 };
 
 export type MeDto = {
@@ -47,6 +55,7 @@ export type MeDto = {
   shared: boolean;
   /** % of pits still unmapped by others when you crossed (null until crossed) */
   pioneer: number | null;
+  myArrow: MyArrowDto | null;
 };
 
 export type InitResponse = {
@@ -64,11 +73,6 @@ export type CrossResponse = { type: 'cross'; me: MeDto; day: DayDto };
 
 export type CarveRequest = { day: number; i: number; arrow: Direction };
 export type CarveResponse = { type: 'carve'; grave: GraveDto; me: MeDto };
-
-export type VoteRequest = { day: number; id: string; vote: Vote };
-export type VoteResponse = { type: 'vote'; epitaph: EpitaphDto; grave: GraveDto };
-
-export type GraveResponse = { type: 'grave'; grave: GraveDto; epitaphs: EpitaphDto[] };
 
 export type ShareResponse = { type: 'share'; me: MeDto };
 export type JoinResponse = { type: 'join' };
