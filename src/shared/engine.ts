@@ -1,7 +1,7 @@
 // Authoritative game rules over a tiny key-value interface. The Devvit server
 // runs this against Redis; the local preview runs it against an in-memory map.
 import { CANDLES_PER_DAY, ROWS, cellOf, dayNumber, generateBoard, idx, judgeRun, mulberry32, neighbors, type Cell } from './board';
-import { EPITAPHS, FORGOTTEN, isEpitaphId } from './epitaphs';
+import { EPITAPHS, FORGOTTEN, isAnonymous, isEpitaphId } from './epitaphs';
 import { canShare, shareText } from './share';
 import { pioneerFlair, pioneerScore, type Flair } from './pioneer';
 import type {
@@ -198,7 +198,7 @@ export class Engine {
   }
 
   private async assertCanWalk(day: number, user: string): Promise<MeDto> {
-    if (!user || user === 'anonymous') throw new GameError('Log in to walk the crossing');
+    if (isAnonymous(user)) throw new GameError('Log in to walk the crossing');
     const me = await this.me(day, user);
     if (me.crossed) throw new GameError('You already crossed today');
     if (me.candles <= 0) throw new GameError('Your candles are spent for today');
@@ -300,7 +300,7 @@ export class Engine {
 
   async vote(day: number, user: string, id: string, vote: unknown): Promise<VoteResponse> {
     if (vote !== 'honest' && vote !== 'liar') throw new GameError('Unknown vote');
-    if (!user || user === 'anonymous') throw new GameError('Log in to judge the dead');
+    if (isAnonymous(user)) throw new GameError('Log in to judge the dead');
     const e = await this.store.hGetAll(K.ep(day, id));
     if (!e.user) throw new GameError('No such epitaph');
     if (e.user === user) throw new GameError("You can't judge your own last words");
@@ -318,6 +318,7 @@ export class Engine {
 
   /** The flair a player has earned today (only after crossing). */
   async flairFor(day: number, user: string): Promise<Flair> {
+    if (isAnonymous(user)) throw new GameError('Log in to wear a title');
     const me = await this.me(day, user);
     if (!me.crossed || me.pioneer === null) throw new GameError('Cross the dark to earn a title');
     return pioneerFlair(day, me.pioneer);
@@ -325,6 +326,7 @@ export class Engine {
 
   /** Claim today's single share; returns the comment text to post. */
   async claimShare(day: number, user: string): Promise<string> {
+    if (isAnonymous(user)) throw new GameError('Log in to share');
     const me = await this.me(day, user);
     if (!canShare(me)) throw new GameError('Finish your crossing first');
     // atomic claim: only one concurrent request can hold it

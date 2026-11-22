@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { context, reddit } from '@devvit/web/server';
 import { Engine, GameError } from '../../shared/engine';
+import { ANONYMOUS } from '../../shared/epitaphs';
 import type { ErrorResponse, FlairResponse, JoinResponse, ShareResponse } from '../../shared/api';
 import { redisStore } from '../core/redisStore';
 import { postDay } from '../core/post';
@@ -9,7 +10,14 @@ const engine = new Engine(redisStore);
 
 export const api = new Hono();
 
-const username = async (): Promise<string> => (await reddit.getCurrentUsername()) ?? 'anonymous';
+const username = async (): Promise<string> => (await reddit.getCurrentUsername()) ?? ANONYMOUS;
+
+/** For routes that act on a Reddit account: never pass a placeholder to Reddit. */
+const requireUser = async (): Promise<string> => {
+  const user = await reddit.getCurrentUsername();
+  if (!user) throw new GameError('Log in to Reddit first');
+  return user;
+};
 
 const fail = (c: Context, error: unknown) => {
   if (error instanceof GameError) return c.json<ErrorResponse>({ status: 'error', message: error.message }, 400);
@@ -83,7 +91,7 @@ api.post('/share', async (c) => {
   try {
     const body = await readBody(c);
     const day = dayFrom(body);
-    const user = await username();
+    const user = await requireUser();
     const { postId } = context;
     if (!postId) throw new GameError('Open the game from its post');
     const text = await engine.claimShare(day, user);
@@ -101,6 +109,7 @@ api.post('/share', async (c) => {
 
 api.post('/join', async (c) => {
   try {
+    await requireUser();
     await reddit.subscribeToCurrentSubreddit();
     return c.json<JoinResponse>({ type: 'join' });
   } catch (e) {
@@ -112,7 +121,7 @@ api.post('/flair', async (c) => {
   try {
     const body = await readBody(c);
     const day = dayFrom(body);
-    const user = await username();
+    const user = await requireUser();
     const { subredditName } = context;
     if (!subredditName) throw new GameError('Open the game from its post');
     const flair = await engine.flairFor(day, user);

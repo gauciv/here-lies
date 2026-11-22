@@ -130,6 +130,15 @@ void test('pioneer score rewards crossing before others map the pits', async () 
   assert.equal(solo.me.pioneer, late.me.pioneer);
 });
 
+void test('logged-out placeholders can never act, and real names are never mistaken for them', async () => {
+  const e = new Engine(new MemoryStore());
+  await assert.rejects(e.cross(DAY, '~anonymous', crossPath), /Log in/);
+  await assert.rejects(e.flairFor(DAY, '~anonymous'), /Log in/);
+  await assert.rejects(e.claimShare(DAY, '~anonymous'), /Log in/);
+  const real = await e.cross(DAY, 'anonymous', crossPath); // a real Reddit user may be called this
+  assert.equal(real.me.crossed, true);
+});
+
 void test('rejects forged runs', async () => {
   const e = new Engine(new MemoryStore());
   await assert.rejects(e.cross(DAY, 'dave', [{ c: 3, r: 0 }]), GameError);
