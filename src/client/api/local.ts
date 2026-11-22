@@ -9,8 +9,7 @@ import type { GameApi } from './types';
 const ME = 'you';
 const GHOSTS = [
   'morrow_fen', 'quietcartographer', 'elk_and_ember', 'tallowwick', 'bramble_owl', 'saltmarsh_sam',
-  'nightjar_77', 'grey_lantern', 'mothwing', 'old_cobbles', 'fernhollow', 'ashgrove_ada', 'pitfall_pete',
-  'lanternless', 'wren_in_wool', 'cinder_and_salt',
+  'nightjar_77', 'grey_lantern',
 ];
 
 const store = new MemoryStore();
@@ -20,7 +19,6 @@ const board = generateBoard(day);
 
 const seed = async () => {
   const rand = mulberry32(day * 101 + 5);
-  const epIds: string[] = [];
   for (const ghost of GHOSTS) {
     for (let life = 0; life < CANDLES_PER_DAY; life++) {
       const path: Cell[] = [];
@@ -45,13 +43,7 @@ const seed = async () => {
       const truth = directionBetween(stone, at) ?? 0;
       const options = validDirections(stone).filter((d) => d !== truth);
       const arrow = rand() < 0.65 || !options.length ? truth : options[Math.floor(rand() * options.length)]!;
-      const carved = await engine.carve(day, ghost, fell.grave.i, arrow);
-      if (carved.grave.top) epIds.push(carved.grave.top.id);
-    }
-  }
-  for (const voter of GHOSTS) {
-    for (const id of epIds) {
-      if (rand() < 0.45) await engine.vote(day, voter, id, rand() < 0.62 ? 'honest' : 'liar').catch(() => undefined);
+      if (fell.me.uncarved !== null) await engine.carve(day, ghost, fell.grave.i, arrow);
     }
   }
 };
@@ -64,8 +56,6 @@ export const localApi: GameApi = {
   fall: (d, path) => wait(Promise.resolve()).then(() => engine.fall(d, ME, path)),
   cross: (d, path) => wait(Promise.resolve()).then(() => engine.cross(d, ME, path)),
   carve: (d, i, arrow) => wait(Promise.resolve()).then(() => engine.carve(d, ME, i, arrow)),
-  vote: (d, id, v) => wait(Promise.resolve()).then(() => engine.vote(d, ME, id, v)),
-  grave: (d, i) => wait(Promise.resolve()).then(() => engine.graveDetail(d, ME, i)),
   share: (d) =>
     wait(Promise.resolve())
       .then(() => engine.claimShare(d, ME))
