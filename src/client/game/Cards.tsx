@@ -136,19 +136,15 @@ export const GraveCard = ({ grave, me, board, judged, onClose }: {
 };
 
 /** You fell, but this fall can't carve: say why, then send them back to the stairs. */
+/** A death with nothing to carve: your ghost in its pit, the dark all around, and a way back. */
 export const FellAgainCard = ({ me, reason, onWalk }: { me: MeDto; reason: 'carvedToday' | 'stoneTaken'; onWalk: () => void }) => (
-  <section className="card" aria-label="You fell">
-    <p className="card-kicker">The dark takes you</p>
-    <p className="epitaph">You fell.</p>
-    <p className="card-meta">
-      {reason === 'carvedToday'
-        ? 'You already carved your one arrow today, so this fall leaves no new mark.'
-        : 'Someone already carved an arrow on the stone you stood on. Your fall only adds to its count.'}
+  <section className="death" aria-label="You died">
+    <p className="death-title">You died.</p>
+    <p className="death-note">
+      {reason === 'carvedToday' ? 'Your one arrow is already carved today.' : 'That stone already bears an arrow.'}
+      {' '}{me.candles} of {CANDLES_PER_DAY} candles left.
     </p>
-    <div className="vote-row">
-      <button className="btn btn-share" onClick={onWalk}>Walk again</button>
-    </div>
-    <p className="card-foot">{me.candles} of {CANDLES_PER_DAY} candles left.</p>
+    <button className="btn btn-share" onClick={onWalk}>Respawn</button>
   </section>
 );
 

@@ -53,7 +53,8 @@ export const App = () => {
     const carving = s.card.kind === 'carve' ? s.card.i : null;
     return {
       board: s.board, revealed: s.revealed, player: s.player, graves, knownPits, phase: s.phase, revealAll,
-      ghost: carving !== null,
+      // your ghost lingers in its pit while you carve, or until you respawn
+      ghost: carving !== null || s.card.kind === 'fellAgain',
       carvePreview: carving !== null ? { stone: carving, dir: s.carveDir } : null,
       fading: s.fading,
     };
@@ -111,7 +112,7 @@ export const App = () => {
       {s.me ? <Hud me={s.me} day={s.day?.day ?? null} onHelp={openHelp} /> : <header className="hud" />}
       <Stage scene={scene} onTap={tap} onFallDone={onFallDone} onCrossDone={onCrossDone}>
         {s.me && s.day && !s.fading && (
-          <div className={`card-layer ${s.player.r >= 4 && s.phase !== 'crossed' ? 'card-layer-top' : ''}`}>
+          <div className={`card-layer ${s.player.r >= 4 && s.phase !== 'crossed' && card.kind !== 'fellAgain' ? 'card-layer-top' : ''}`}>
             {card.kind === 'grave' && grave && s.board && (
               <GraveCard grave={grave} me={s.me} board={s.board} judged={s.phase === 'crossed' || s.phase === 'idle'} onClose={closeCard} />
             )}

@@ -141,6 +141,11 @@ body {
   pointer-events: none;
 }
 .card-layer-top { top: 6px; bottom: auto; }
+/* death: no panel, just words and a way back, low in the dark beneath your ghost */
+.death { pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 10px 8px 4px; animation: rise 0.4s steps(6); }
+.death-title { margin: 0; font-size: 34px; font-weight: 600; line-height: 1; color: #cfe0f5; text-shadow: 0 0 12px rgba(150, 190, 255, 0.35), 2px 2px 0 #0b1222; }
+.death-note { margin: 0; font-size: 13px; color: var(--stone8); max-width: 30ch; }
+@keyframes rise { from { opacity: 0; translate: 0 6px; } to { opacity: 1; translate: 0 0; } }
 .card {
   pointer-events: auto;
   position: relative;
@@ -322,7 +327,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card, .toast, .scroll, .btn-compass.is-truth { animation: none; }
+  .card, .toast, .scroll, .death, .btn-compass.is-truth { animation: none; }
 }
 
 /* ── feed preview (inline launch screen) ─────────── */
