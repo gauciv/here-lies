@@ -25,7 +25,7 @@ const seed = async () => {
       let at: Cell = START;
       let outcome: 'fell' | 'crossed' | null = null;
       for (let step = 0; step < 24 && !outcome; step++) {
-        const options = neighbors(at.c, at.r).filter((n) => !path.some((p) => p.c === n.c && p.r === n.r));
+        const options = neighbors(at.c, at.r).filter((n) => !board.walls[idx(n.c, n.r)] && !path.some((p) => p.c === n.c && p.r === n.r));
         if (!options.length) break;
         // wander mostly upward, a little sideways
         options.sort((a, b) => a.r - b.r + (rand() - 0.5) * 2.2);
@@ -41,7 +41,7 @@ const seed = async () => {
       // most simulated players point honestly at the pit; some lie
       const stone = cellOf(fell.grave.i);
       const truth = directionBetween(stone, at) ?? 0;
-      const options = validDirections(stone).filter((d) => d !== truth);
+      const options = validDirections(board, stone).filter((d) => d !== truth);
       const arrow = rand() < 0.65 || !options.length ? truth : options[Math.floor(rand() * options.length)]!;
       if (fell.me.uncarved !== null) {
         // like real players, about half skip carving unless it's their last candle

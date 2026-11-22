@@ -119,9 +119,9 @@ export const App = () => {
             )}
             {card.kind === 'intro' && <IntroCard onStart={startPlaying} />}
             {card.kind === 'fellAgain' && <FellAgainCard me={s.me} reason={card.reason} onWalk={walkAgain} />}
-            {card.kind === 'carve' && (
+            {card.kind === 'carve' && s.board && (
               <CarveCard
-                me={s.me} step={carveStep} stone={cellOf(card.i)} selected={s.carveDir}
+                me={s.me} board={s.board} step={carveStep} stone={cellOf(card.i)} selected={s.carveDir}
                 fellToward={s.me.fellInto.length ? directionBetween(cellOf(card.i), cellOf(s.me.fellInto[s.me.fellInto.length - 1]!)) : null}
                 onSelect={selectArrow} onCarve={carve} onSkip={skip}
               />

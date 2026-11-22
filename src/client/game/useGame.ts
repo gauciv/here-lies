@@ -131,7 +131,7 @@ export const useGame = () => {
     // carving: tapping a stone next to your slab aims the arrow at it
     if (card.kind === 'carve') {
       const d = directionBetween(cellOf(card.i), cell);
-      if (d !== null && validDirections(cellOf(card.i)).includes(d)) setS((p) => ({ ...p, carveDir: d }));
+      if (d !== null && validDirections(board, cellOf(card.i)).includes(d)) setS((p) => ({ ...p, carveDir: d }));
       return;
     }
     const i = idx(cell.c, cell.r);
@@ -141,6 +141,11 @@ export const useGame = () => {
     if (card.kind !== 'none') setS((p) => ({ ...p, card: { kind: 'none' } }));
     sound.startAmbience();
     if (phase === 'walking' && isStep(player, cell)) {
+      if (board.walls[i]) {
+        sound.play('deny');
+        toast('Solid rock. Find another way.');
+        return;
+      }
       if (s.me?.fellInto.includes(i)) {
         sound.play('deny');
         toast('You already fell there.');

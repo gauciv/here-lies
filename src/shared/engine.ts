@@ -192,7 +192,7 @@ export class Engine {
       .filter((i) => {
         if (i < 0) return false;
         const { c, r } = cellOf(i);
-        return r >= 2 && r <= ROWS - 3 && neighbors(c, r).some((n) => !board.pits[idx(n.c, n.r)]);
+        return r >= 2 && r <= ROWS - 3 && neighbors(c, r).some((n) => !board.pits[idx(n.c, n.r)] && !board.walls[idx(n.c, n.r)]);
       });
     for (let k = candidates.length - 1; k > 0; k--) {
       const j = Math.floor(rand() * (k + 1));
@@ -205,12 +205,12 @@ export class Engine {
       const p = cellOf(pit);
       const stones = neighbors(p.c, p.r)
         .map((n) => idx(n.c, n.r))
-        .filter((n) => !board.pits[n] && !used.has(n) && n !== idx(board.start.c, board.start.r));
+        .filter((n) => !board.pits[n] && !board.walls[n] && !used.has(n) && n !== idx(board.start.c, board.start.r));
       if (!stones.length) continue;
       const stone = stones[Math.floor(rand() * stones.length)]!;
       used.add(stone);
       const truth = directionBetween(cellOf(stone), p) ?? 0;
-      const others = validDirections(cellOf(stone)).filter((d) => !arrowIsTrue(board, stone, d));
+      const others = validDirections(board, cellOf(stone)).filter((d) => !arrowIsTrue(board, stone, d));
       const arrow = rand() < honesty || !others.length ? truth : others[Math.floor(rand() * others.length)]!;
       await this.store.hIncrBy(K.slabClaim(day), String(stone), 1);
       await this.writeArrow(day, stone, { user: FORGOTTEN, arrow: String(arrow), step: '0', at: String(at) });
@@ -352,7 +352,7 @@ export class Engine {
     if (!isDirection(arrow)) throw new GameError('Pick a direction to carve');
     const u = await this.store.hGetAll(K.user(day, user));
     if (!u.uncarved || num(u.uncarved) !== i) throw new GameError('Nothing to carve here');
-    if (!validDirections(cellOf(i)).includes(arrow)) throw new GameError('That arrow points off the edge');
+    if (!validDirections(generateBoard(day), cellOf(i)).includes(arrow)) throw new GameError('That arrow points at no stone');
     // carve and skip race for the same one-time token; only the first wins
     if (!(await this.store.hSetNX(K.user(day, user), `resolved:${u.uncarvedToken ?? ''}`, 'carve'))) throw new GameError('This fall is already settled');
     if (!(await this.store.hSetNX(K.user(day, user), 'carved', '1'))) throw new GameError('Your arrow is already carved');

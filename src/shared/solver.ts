@@ -28,7 +28,7 @@ export const solve = (board: Board): SolveResult => {
 
   const unknownNeighbours = (i: number): number[] => {
     const { c, r } = cellOf(i);
-    return neighbors(c, r).map((n) => idx(n.c, n.r)).filter((n) => !safe.has(n) && !pit.has(n));
+    return neighbors(c, r).map((n) => idx(n.c, n.r)).filter((n) => !board.walls[n] && !safe.has(n) && !pit.has(n));
   };
 
   for (let guard = 0; guard < 400; guard++) {

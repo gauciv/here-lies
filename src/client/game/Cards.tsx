@@ -165,12 +165,12 @@ const COMPASS: readonly (Direction | null)[] = [7, 0, 1, 6, null, 2, 5, 4, 3];
  * Carving, docked so the board stays visible: your ghost stands on the slab,
  * picking an arrow previews it on the board, and "Carve" makes it final.
  */
-export const CarveCard = ({ me, step, stone, fellToward, selected, onSelect, onCarve, onSkip }: {
-  me: MeDto; step: number | null; stone: Cell; fellToward: Direction | null; selected: Direction | null;
+export const CarveCard = ({ me, board, step, stone, fellToward, selected, onSelect, onCarve, onSkip }: {
+  me: MeDto; board: Board; step: number | null; stone: Cell; fellToward: Direction | null; selected: Direction | null;
   onSelect: (d: Direction) => void; onCarve: (d: Direction) => void; onSkip: () => void;
 }) => {
   const [busy, setBusy] = useState(false);
-  const valid = validDirections(stone);
+  const valid = validDirections(board, stone);
   const told = selected === null ? null : selected === fellToward ? 'the truth' : 'a lie';
   return (
     <section className="card card-carve card-dock" aria-label="Carve your arrow">

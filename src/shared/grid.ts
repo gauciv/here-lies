@@ -11,6 +11,10 @@ export type Board = {
   rows: number;
   /** pits[idx(c, r)] === true when the stone at (c, r) hides a pit */
   pits: boolean[];
+  /** walls[idx(c, r)] === true where the room is solid rock: never a pit, never a step */
+  walls: boolean[];
+  /** today's room, e.g. "The Drowned Gallery" */
+  name: string;
   start: Cell;
   /** the exit: a stone in the far row, in front of the door (column varies by day) */
   door: Cell;
@@ -22,6 +26,10 @@ export const idx = (c: number, r: number): number => r * COLS + c;
 export const cellOf = (i: number): Cell => ({ c: i % COLS, r: Math.floor(i / COLS) });
 export const inBounds = (c: number, r: number): boolean =>
   c >= 0 && r >= 0 && c < COLS && r < ROWS;
+
+/** A stone you can stand on (or fall through): inside the room and not solid rock. */
+export const isOpen = (board: Board, c: number, r: number): boolean =>
+  inBounds(c, r) && !board.walls[idx(c, r)];
 
 export const isStep = (a: Cell, b: Cell): boolean =>
   Math.max(Math.abs(a.c - b.c), Math.abs(a.r - b.r)) === 1;

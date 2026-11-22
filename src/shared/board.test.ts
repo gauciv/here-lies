@@ -10,6 +10,7 @@ import {
   idx,
   judgeRun,
   neighbors,
+  pitRange,
   shortestCrossing,
   type Cell,
 } from './board.ts';
@@ -23,14 +24,16 @@ void test('every board for a year is winnable with a safe start', () => {
   for (let day = 1; day <= 365; day++) {
     const b = generateBoard(day);
     assert.equal(b.pits.length, COLS * ROWS);
-    assert.ok(shortestCrossing(b.pits) > 0, `day ${day} unwinnable`);
+    assert.ok(shortestCrossing(b) > 0, `day ${day} unwinnable`);
     assert.equal(b.door.r, 0);
     assert.equal(b.pits[idx(b.door.c, b.door.r)], false, `day ${day} door is a pit`);
     assert.equal(b.pits[idx(START.c, START.r)], false);
     for (const n of neighbors(START.c, START.r)) assert.equal(b.pits[idx(n.c, n.r)], false);
     const count = b.pits.filter(Boolean).length;
-    const diff = difficultyOf(day);
-    assert.ok(count >= diff.pits[0] && count <= diff.pits[1], `day ${day} has ${count} pits`);
+    const [lo, hi] = pitRange(difficultyOf(day), b.walls);
+    assert.ok(count >= lo && count <= hi, `day ${day} has ${count} pits`);
+    assert.ok(b.pits.every((p, i) => !(p && b.walls[i])), `day ${day} has a pit in the rock`);
+    assert.equal(b.walls[idx(b.door.c, b.door.r)], false, `day ${day} door is in the rock`);
   }
 });
 
@@ -38,6 +41,20 @@ void test('the door moves along the far wall from day to day', () => {
   const cols = new Set<number>();
   for (let day = 1; day <= 60; day++) cols.add(generateBoard(day).door.c);
   assert.ok(cols.size >= 4, `door only ever in columns ${[...cols]}`);
+});
+
+void test('rooms change shape and name, and never repeat a shape within a week', () => {
+  const names = new Set<string>();
+  for (let week = 0; week < 8; week++) {
+    const shapes = new Set<string>();
+    for (let k = 1; k <= 7; k++) {
+      const b = generateBoard(week * 7 + k);
+      names.add(b.name);
+      shapes.add(b.walls.map((w) => (w ? 1 : 0)).join('') + b.name.split(' ').at(-1));
+    }
+    assert.equal(shapes.size, 7, `week ${week} repeats a room`);
+  }
+  assert.ok(names.size >= 40, `only ${names.size} names in 56 days`);
 });
 
 void test('clue counts touching pits', () => {
@@ -61,7 +78,7 @@ const safePath = (day: number): Cell[] => {
     const c = cur % COLS, r = Math.floor(cur / COLS);
     for (const n of neighbors(c, r)) {
       const ni = idx(n.c, n.r);
-      if (seen.has(ni) || b.pits[ni]) continue;
+      if (seen.has(ni) || b.pits[ni] || b.walls[ni]) continue;
       seen.add(ni); prev.set(ni, cur); q.push(ni);
       if (n.c === b.door.c && n.r === b.door.r) { end = ni; break; }
     }

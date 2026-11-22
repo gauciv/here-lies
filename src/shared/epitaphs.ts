@@ -1,7 +1,7 @@
 // Last words are an arrow carved into the slab where you last stood: "I stepped
 // this way and fell". It can be the truth or a lie. No free text means nothing
 // to moderate, and an arrow reads at a glance in torchlight.
-import { cellOf, idx, inBounds, type Board, type Cell } from './grid';
+import { cellOf, idx, inBounds, isOpen, type Board, type Cell } from './grid';
 
 /** 0 up, then clockwise: 1 up-right, 2 right, 3 down-right, 4 down, 5 down-left, 6 left, 7 up-left */
 export type Direction = number;
@@ -28,11 +28,11 @@ export const pointedCell = (from: Cell, d: Direction): Cell => {
   return { c: from.c + v.dc, r: from.r + v.dr };
 };
 
-/** Directions from a stone that stay on the board. */
-export const validDirections = (from: Cell): Direction[] =>
+/** Directions from a stone that point at another open stone (not off the board, not into rock). */
+export const validDirections = (board: Board, from: Cell): Direction[] =>
   DIRECTIONS.map((_, d) => d).filter((d) => {
     const p = pointedCell(from, d);
-    return inBounds(p.c, p.r);
+    return isOpen(board, p.c, p.r);
   });
 
 /** Direction from one cell to an adjacent one, or null if not adjacent. */

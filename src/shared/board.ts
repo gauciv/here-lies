@@ -2,7 +2,8 @@
 // sees the same crossing. Pure functions only — imported by client and server.
 
 export * from './grid';
-import { COLS, ROWS, START, idx, cellOf, neighbors, isStep, inBounds, type Board, type Cell } from './grid';
+import { COLS, ROWS, START, idx, cellOf, neighbors, isStep, isOpen, type Board, type Cell } from './grid';
+import { roomPlan } from './rooms';
 import { solve } from './solver';
 
 export const CANDLES_PER_DAY = 3;
@@ -37,18 +38,19 @@ const hashInts = (...xs: number[]): number => {
   return h >>> 0;
 };
 
-/** Shortest 8-connected safe path length from start to the far row, or -1. */
-export const shortestCrossing = (pits: boolean[], start: Cell = START): number => {
+/** Shortest 8-connected safe path length from the stairs to the door, or -1. */
+export const shortestCrossing = (board: Board): number => {
   const dist = new Array<number>(COLS * ROWS).fill(-1);
-  const q: number[] = [idx(start.c, start.r)];
+  const q: number[] = [idx(board.start.c, board.start.r)];
   dist[q[0]!] = 0;
+  const door = idx(board.door.c, board.door.r);
   for (let h = 0; h < q.length; h++) {
     const cur = q[h]!;
+    if (cur === door) return dist[cur]!;
     const { c, r } = cellOf(cur);
-    if (r === 0) return dist[cur]!;
     for (const n of neighbors(c, r)) {
       const ni = idx(n.c, n.r);
-      if (dist[ni] === -1 && !pits[ni]) {
+      if (dist[ni] === -1 && !board.pits[ni] && isOpen(board, n.c, n.r)) {
         dist[ni] = dist[cur]! + 1;
         q.push(ni);
       }
@@ -80,14 +82,21 @@ const WEEK: readonly Difficulty[] = [TRICKY, GENTLE, GENTLE, TRICKY, TRICKY, CRU
 
 export const difficultyOf = (day: number): Difficulty => WEEK[new Date(dayStartUtc(day)).getUTCDay()] ?? GENTLE;
 
-const placePits = (rand: () => number, count: number, door: Cell): boolean[] => {
+/** How many pits a room of this many open stones gets, scaled from the full-room range. */
+export const pitRange = (diff: Difficulty, walls: boolean[]): [number, number] => {
+  const open = walls.filter((w) => !w).length;
+  const k = open / (COLS * ROWS);
+  return [Math.round(diff.pits[0] * k), Math.round(diff.pits[1] * k)];
+};
+
+const placePits = (rand: () => number, count: number, door: Cell, walls: boolean[]): boolean[] => {
   const pits = new Array<boolean>(COLS * ROWS).fill(false);
   const safe = new Set<number>([idx(START.c, START.r), idx(door.c, door.r)]);
   for (const n of neighbors(START.c, START.r)) safe.add(idx(n.c, n.r));
   let placed = 0;
   while (placed < count) {
     const i = Math.floor(rand() * COLS * ROWS);
-    if (safe.has(i) || pits[i]) continue;
+    if (safe.has(i) || pits[i] || walls[i]) continue;
     pits[i] = true;
     placed++;
   }
@@ -105,13 +114,17 @@ export const generateBoard = (day: number): Board => {
   const cached = boardCache.get(day);
   if (cached) return cached;
   const diff = difficultyOf(day);
+  // the room's shape and name are fixed for the day; only the pits are searched
+  const { walls, name } = roomPlan(day, mulberry32(hashInts(0x0b0e, day)));
+  const [lo, hi] = pitRange(diff, walls);
+  const doors = Array.from({ length: COLS }, (_, c) => c).filter((c) => !walls[idx(c, 0)]);
   let fallback: Board | null = null;
   for (let attempt = 0; attempt < 6000; attempt++) {
     const rand = mulberry32(hashInts(0x4e1e, day, attempt));
-    const count = diff.pits[0] + Math.floor(rand() * (diff.pits[1] - diff.pits[0] + 1));
+    const count = lo + Math.floor(rand() * (hi - lo + 1));
     // the door moves along the far wall from day to day
-    const door: Cell = { c: Math.floor(rand() * COLS), r: 0 };
-    const board: Board = { day, cols: COLS, rows: ROWS, pits: placePits(rand, count, door), start: START, door };
+    const door: Cell = { c: doors[Math.floor(rand() * doors.length)] ?? START.c, r: 0 };
+    const board: Board = { day, cols: COLS, rows: ROWS, pits: placePits(rand, count, door, walls), walls, name, start: START, door };
     const result = solve(board);
     if (!result.solved) continue;
     if (result.comparisons >= diff.comparisons[0] && result.comparisons <= diff.comparisons[1]) {
@@ -133,14 +146,14 @@ export type RunOutcome =
 
 /**
  * Server-side check of a walked path (start excluded). A valid run is a chain of
- * single steps over safe stones that either reaches row 0 or ends in exactly one pit.
+ * single steps over open, safe stones that either reaches the door or ends in exactly one pit.
  */
 export const judgeRun = (board: Board, path: Cell[]): RunOutcome => {
   if (path.length === 0 || path.length > 200) return { kind: 'invalid', reason: 'bad length' };
   let prev = board.start;
   for (let i = 0; i < path.length; i++) {
     const p = path[i]!;
-    if (!Number.isInteger(p.c) || !Number.isInteger(p.r) || !inBounds(p.c, p.r))
+    if (!Number.isInteger(p.c) || !Number.isInteger(p.r) || !isOpen(board, p.c, p.r))
       return { kind: 'invalid', reason: 'out of bounds' };
     if (!isStep(prev, p)) return { kind: 'invalid', reason: 'not a step' };
     const last = i === path.length - 1;

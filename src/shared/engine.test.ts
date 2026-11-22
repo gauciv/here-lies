@@ -18,7 +18,7 @@ const pathTo = (target: (c: Cell) => boolean): Cell[] => {
     const cur = q[h]!;
     for (const n of neighbors(cur % COLS, Math.floor(cur / COLS))) {
       const ni = idx(n.c, n.r);
-      if (seen.has(ni)) continue;
+      if (seen.has(ni) || board.walls[ni]) continue;
       seen.add(ni);
       prev.set(ni, cur);
       if (target(n)) {
@@ -34,7 +34,7 @@ const pathTo = (target: (c: Cell) => boolean): Cell[] => {
 
 const pitPath = pathTo((c) => board.pits[idx(c.c, c.r)] === true);
 const crossPath = pathTo((c) => c.c === board.door.c && c.r === board.door.r);
-const arrowFor = (stone: number): number => validDirections(cellOf(stone))[0]!;
+const arrowFor = (stone: number): number => validDirections(board, cellOf(stone))[0]!;
 
 void test('fall → carve → cross loop', async () => {
   const e = new Engine(new MemoryStore());
@@ -171,7 +171,7 @@ void test('arrows earn saved and fooled credit from later walkers', async () => 
   const stone = idx(lastSafe.c, lastSafe.r);
   // a liar points at a stone that is not a pit
   await e.fall(DAY, 'liar', pitPath);
-  const lie = validDirections(lastSafe).find((d) => !arrowIsTrue(board, stone, d))!;
+  const lie = validDirections(board, lastSafe).find((d) => !arrowIsTrue(board, stone, d))!;
   await e.carve(DAY, 'liar', stone, lie);
   // someone trusts it, steps off the same stone into the pit: fooled
   await e.fall(DAY, 'victim', pitPath);
