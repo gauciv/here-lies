@@ -331,6 +331,7 @@ export class Engine {
               uncarved: String(stone),
               uncarvedStep: String(outcome.steps),
               uncarvedSkippable: lastCandle ? '0' : '1',
+              uncarvedToken: String(spent),
               uncarvedReplaces: carving === 'replace' ? '1' : '0',
             }
           : {}),
@@ -350,6 +351,8 @@ export class Engine {
     const u = await this.store.hGetAll(K.user(day, user));
     if (!u.uncarved || num(u.uncarved) !== i) throw new GameError('Nothing to carve here');
     if (!validDirections(cellOf(i)).includes(arrow)) throw new GameError('That arrow points off the edge');
+    // carve and skip race for the same one-time token; only the first wins
+    if (!(await this.store.hSetNX(K.user(day, user), `resolved:${u.uncarvedToken ?? ''}`, 'carve'))) throw new GameError('This fall is already settled');
     if (!(await this.store.hSetNX(K.user(day, user), 'carved', '1'))) throw new GameError('Your arrow is already carved');
     if (u.uncarvedReplaces === '1') {
       const old = await this.store.hGet(K.slabArrow(day), String(i));
@@ -367,6 +370,7 @@ export class Engine {
     const u = await this.store.hGetAll(K.user(day, user));
     if (!u.uncarved || num(u.uncarved) !== i) throw new GameError('Nothing to carve here');
     if (u.uncarvedSkippable !== '1') throw new GameError('Your last candle must leave an arrow');
+    if (!(await this.store.hSetNX(K.user(day, user), `resolved:${u.uncarvedToken ?? ''}`, 'skip'))) throw new GameError('This fall is already settled');
     // release both claims so the stone, and your one carving, stay available
     await this.store.hIncrBy(K.slabClaim(day), String(i), -1);
     await this.store.hIncrBy(K.user(day, user), 'carveClaim', -1);

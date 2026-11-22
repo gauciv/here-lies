@@ -219,6 +219,18 @@ void test('a slab crumbles after five walkers stand on it', async () => {
   assert.equal(init.me.myArrow?.visits, 5);
 });
 
+void test('concurrent skip and carve requests settle a fall exactly once', async () => {
+  const e = new Engine(new MemoryStore());
+  const f = await e.fall(DAY, 'racer', pitPath);
+  const i = f.grave.i;
+  const results = await Promise.allSettled([e.skip(DAY, 'racer', i), e.skip(DAY, 'racer', i), e.carve(DAY, 'racer', i, arrowFor(i))]);
+  assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
+  // the stone's claim never went negative: exactly one later faller can carve it if it was released
+  const a = await e.fall(DAY, 'next1', pitPath);
+  const b = await e.fall(DAY, 'next2', pitPath);
+  assert.ok([a.me.uncarved, b.me.uncarved].filter((x) => x !== null).length <= 1);
+});
+
 void test('rejects forged runs', async () => {
   const e = new Engine(new MemoryStore());
   await assert.rejects(e.cross(DAY, 'dave', [{ c: 3, r: 0 }]), GameError);
