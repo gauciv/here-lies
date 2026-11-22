@@ -31,6 +31,8 @@ export const App = () => {
   const [entering, setEntering] = useState(false);
   // back from a game over: the soul's homecoming plays before the camp shows anything
   const [reviving, setReviving] = useState(false);
+  // game over → 'Back to camp': the soul first floats off the board to the stairs
+  const [soulLeaving, setSoulLeaving] = useState(false);
   const standby = useRef<StandbyHandle>(null);
   const autoEnter = useRef(consumeAutoEnter());
   const { s, tap, onFallDone, onCrossDone, carve, selectArrow, skip, share, join, flair, walkAgain, leaveRun, openResult, startPlaying, openHelp, closeCard, hint } = useGame();
@@ -59,8 +61,9 @@ export const App = () => {
       ghost: carving !== null || s.card.kind === 'fellAgain' || s.card.kind === 'gameOver',
       carvePreview: carving !== null ? { stone: carving, dir: s.carveDir } : null,
       fading: s.fading,
+      soulLeaving,
     };
-  }, [s.board, s.revealed, s.player, s.graves, s.phase, s.card, s.carveDir, s.fading]);
+  }, [s.board, s.revealed, s.player, s.graves, s.phase, s.card, s.carveDir, s.fading, soulLeaving]);
 
   /** Fade to black, swap what's on screen, fade back in. */
   const crossFade = useCallback((to: 'camp' | 'board') => {
@@ -117,6 +120,12 @@ export const App = () => {
       {s.me ? <Hud me={s.me} day={s.day?.day ?? null} onHelp={openHelp} /> : <header className="hud" />}
       <Stage
         scene={scene} onTap={tap} onFallDone={onFallDone} onCrossDone={onCrossDone}
+        onSoulGone={() => {
+          setReviving(true);
+          crossFade('camp');
+          // only once the screen is dark: otherwise the lifted room flashes before the camp
+          window.setTimeout(() => { leaveRun(); setSoulLeaving(false); }, 600);
+        }}
         focusRow={card.kind === 'carve' || card.kind === 'fellAgain' || card.kind === 'gameOver' ? s.player.r : null}
       >
         {s.me && s.day && !s.fading && (
@@ -126,7 +135,7 @@ export const App = () => {
             )}
             {card.kind === 'intro' && <IntroCard onStart={startPlaying} />}
             {card.kind === 'fellAgain' && <FellAgainCard me={s.me} onWalk={walkAgain} />}
-            {card.kind === 'gameOver' && <GameOverCard onCamp={() => { leaveRun(); setReviving(true); crossFade('camp'); }} />}
+            {card.kind === 'gameOver' && !soulLeaving && <GameOverCard onCamp={() => setSoulLeaving(true)} />}
             {card.kind === 'carve' && s.board && (
               <CarveCard
                 me={s.me} board={s.board} stone={cellOf(card.i)} selected={s.carveDir}

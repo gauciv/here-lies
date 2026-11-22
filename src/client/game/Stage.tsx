@@ -7,20 +7,21 @@ type Props = {
   onTap: (cell: Cell) => void;
   onFallDone: () => void;
   onCrossDone: () => void;
+  onSoulGone?: () => void;
   /** keep this row in view beside the docked card (your ghost while you carve or mourn) */
   focusRow?: number | null;
   children?: ReactNode;
 };
 
 /** Integer-scaled pixel canvas that fills the space it is given. */
-export const Stage = ({ scene, onTap, onFallDone, onCrossDone, focusRow = null, children }: Props) => {
+export const Stage = ({ scene, onTap, onFallDone, onCrossDone, onSoulGone, focusRow = null, children }: Props) => {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const engine = useRef<Scene | null>(null);
-  const handlers = useRef({ onFallDone, onCrossDone });
+  const handlers = useRef({ onFallDone, onCrossDone, onSoulGone });
   useEffect(() => {
-    handlers.current = { onFallDone, onCrossDone };
-  }, [onFallDone, onCrossDone]);
+    handlers.current = { onFallDone, onCrossDone, onSoulGone };
+  }, [onFallDone, onCrossDone, onSoulGone]);
   const [scale, setScale] = useState(3);
   const [pan, setPan] = useState(0);
   const frame = useRef<HTMLDivElement>(null);
@@ -30,6 +31,7 @@ export const Stage = ({ scene, onTap, onFallDone, onCrossDone, focusRow = null, 
     const sc = new Scene(canvas.current, {
       onFallDone: () => handlers.current.onFallDone(),
       onCrossDone: () => handlers.current.onCrossDone(),
+      onSoulGone: () => handlers.current.onSoulGone?.(),
     });
     engine.current = sc;
     sc.start();

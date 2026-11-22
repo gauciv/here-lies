@@ -132,6 +132,7 @@ export const useGame = () => {
   const tap = useCallback((cell: Cell) => {
     const { board, phase, card, player, graves, day } = s;
     if (!board || !day) return;
+    if (card.kind === 'gameOver') return; // the soul is on its way home; the board waits
     // carving: tapping a stone next to your slab aims the arrow at it
     if (card.kind === 'carve') {
       const d = directionBetween(cellOf(card.i), cell);

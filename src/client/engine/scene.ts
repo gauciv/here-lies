@@ -42,6 +42,8 @@ export type SceneState = {
   carvePreview: { stone: number; dir: number | null } | null;
   /** fading to black before a respawn */
   fading: boolean;
+  /** game over: the soul rises from its pit and drifts to the entrance, ignoring the stones */
+  soulLeaving: boolean;
 };
 
 /** How far the torch reaches, in tiles (centre to centre). Drawing and tapping share it. */
@@ -55,11 +57,14 @@ export const isLit = (player: Cell, cell: Cell): boolean =>
 export type SceneEvents = {
   onFallDone?: () => void;
   onCrossDone?: () => void;
+  /** the departing soul has reached the stairs */
+  onSoulGone?: () => void;
 };
 
 type Mote = { x: number; y: number; vx: number; vy: number; life: number; seed: number };
 type Shatter = { x: number; y: number; t0: number };
 const REVIVE_MS = 1500;
+const LEAVE_MS = 2000;
 const SHATTER_MS = 1100;
 
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
@@ -118,6 +123,7 @@ export class Scene {
   private reviveT0 = -1;
   private raf = 0;
   private torchGlow = 1;
+  private leaveT0 = -1;
   private dawn = 0;
 
   constructor(canvas: HTMLCanvasElement, events: SceneEvents = {}) {
@@ -168,6 +174,8 @@ export class Scene {
         }
       }
     }
+    if (next.soulLeaving && !prev?.soulLeaving) this.leaveT0 = now;
+    if (!next.soulLeaving) this.leaveT0 = -1;
     if (next.phase !== this.lastPhase) {
       this.phaseT0 = now;
       this.lastPhase = next.phase;
@@ -332,14 +340,14 @@ export class Scene {
   }
 
   /** The dwarf's spirit hovering over the pit where it died (drawn after lighting, so it glows). */
-  private drawGhost(ctx: CanvasRenderingContext2D, hx: number, hy: number, flip: boolean, t: number): void {
+  private drawGhost(ctx: CanvasRenderingContext2D, hx: number, hy: number, flip: boolean, t: number, alpha = 1): void {
     const frames = getSprites().ghost;
     const sprite = frames[this.reduced ? 0 : Math.floor(t * 2.5) % 2]!;
     const bob = this.reduced ? 0 : Math.round(Math.sin(t * 2.2) * 1.5);
     const gx = hx + Math.round((HERO_W - sprite.w) / 2);
     const gy = hy + HERO_H - sprite.h - 3 + bob;
     ctx.save();
-    ctx.globalAlpha = 0.82;
+    ctx.globalAlpha = 0.82 * alpha;
     if (flip) {
       ctx.translate(gx + sprite.w, gy);
       ctx.scale(-1, 1);
@@ -407,8 +415,19 @@ export class Scene {
 
     // walking through the door while crossing
     const walkK = Math.min(1, crossP / 0.5);
-    const walkY = crossP > 0 ? s.player.r - walkK * 1.5 : this.pos.y;
-    const walkX = crossP > 0 ? this.pos.x + (s.board.door.c - this.pos.x) * walkK : this.pos.x;
+    let walkY = crossP > 0 ? s.player.r - walkK * 1.5 : this.pos.y;
+    let walkX = crossP > 0 ? this.pos.x + (s.board.door.c - this.pos.x) * walkK : this.pos.x;
+    // the soul's way home: straight to the stairs it came up, over pits and rock alike
+    let soulAlpha = 1;
+    if (s.ghost && this.leaveT0 !== -1) {
+      const raw = this.leaveT0 === -2 ? 1 : Math.min(1, (now - this.leaveT0) / LEAVE_MS);
+      const k = raw < 0.5 ? 2 * raw * raw : 1 - Math.pow(-2 * raw + 2, 2) / 2;
+      walkX = this.pos.x + (START_CELL.c - this.pos.x) * k;
+      walkY = this.pos.y + (ROWS + 0.35 - this.pos.y) * k - Math.sin(raw * Math.PI) * 0.6;
+      soulAlpha = 1 - Math.max(0, (raw - 0.82) / 0.18);
+      if (raw >= 1 && this.leaveT0 !== -2) { this.leaveT0 = -2; this.events.onSoulGone?.(); }
+    }
+    if (this.leaveT0 === -2) soulAlpha = 0;
 
     const ctx = this.ctx;
     ctx.drawImage(this.layer, 0, 0);
@@ -481,7 +500,7 @@ export class Scene {
     const torch = s.ghost ? { x: hx + 8, y: hy + 16 } : { x: hand.x, y: hand.y - 11 };
     const tint = s.ghost ? [0.62, 0.8, 1.05] : [1, 0.68, 0.38];
     const flick = this.reduced ? 1 : 1 + 0.06 * Math.sin(t * 9.1) + 0.04 * Math.sin(t * 15.7 + 1.3) + 0.025 * Math.sin(t * 37.0);
-    const targetGlow = s.ghost ? 0.8 : s.phase === 'fallen' || s.phase === 'idle' ? 0 : 1;
+    const targetGlow = s.ghost ? 0.8 * soulAlpha : s.phase === 'fallen' || s.phase === 'idle' ? 0 : 1;
     this.torchGlow += (targetGlow - this.torchGlow) * 0.08;
     const LR = Math.max(1, TORCH_RADIUS * TILE * (s.ghost ? 1 : flick) * this.torchGlow * (s.ghost ? 1 : 1 - 0.75 * fallP));
     const [tr, tg, tb] = tint as [number, number, number];
@@ -538,7 +557,7 @@ export class Scene {
 
         // carving: your ghost on the slab, and a preview of the arrow being considered
     if (s.carvePreview) this.drawCarvePreview(ctx, s.carvePreview.stone, s.carvePreview.dir, t);
-    if (s.ghost) this.drawGhost(ctx, hx, hy, flip, t);
+    if (s.ghost && soulAlpha > 0) this.drawGhost(ctx, hx, hy, flip, t, soulAlpha);
 
     // step markers: corner brackets on stones you can step to
     if (s.phase === 'walking' && this.hopT0 < 0) {
