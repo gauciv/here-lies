@@ -171,7 +171,7 @@ export const CarveCard = ({ me, step, stone, fellToward, onCarve }: {
       <p className="card-kicker">Here lies you</p>
       <p className="epitaph">{fellToward !== null ? `You fell ${directionName(fellToward)}.` : 'The stone gave way.'}</p>
       <p className="card-meta">
-        Carve an arrow into the slab where you stood{step ? ` (step ${step})` : ''}. Point at the pit to warn the next wanderer, or point elsewhere to lie.
+        Carve an arrow on the stone you stood on{step ? ` (step ${step})` : ''}. Point at the pit, or lie.
       </p>
       <div className="compass" role="group" aria-label="Choose an arrow">
         {COMPASS.map((d, k) =>

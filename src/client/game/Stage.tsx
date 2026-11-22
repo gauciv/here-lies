@@ -63,8 +63,8 @@ export const Stage = ({ scene, onTap, onFallDone, onCrossDone, children }: Props
             if (cell) onTap(cell);
           }}
         />
-        {children}
       </div>
+      {children}
     </div>
   );
 };
