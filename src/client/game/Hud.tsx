@@ -2,7 +2,23 @@ import { CANDLES_PER_DAY, difficultyOf } from '../../shared/board';
 import { dateLabel } from './format';
 import type { DayDto, MeDto } from '../../shared/api';
 import { PixelIcon } from './PixelIcon';
-import { CANDLE_LEGEND, CANDLE_LIT, CANDLE_OUT } from './icons';
+import { useState } from 'react';
+import { CANDLE_LEGEND, CANDLE_LIT, CANDLE_OUT, SPEAKER_LEGEND, SPEAKER_OFF, SPEAKER_ON } from './icons';
+import { sound } from '../engine/sound';
+
+const MuteButton = () => {
+  const [muted, setMuted] = useState(sound.muted);
+  return (
+    <button
+      className="mute"
+      aria-label={muted ? 'Turn sound on' : 'Turn sound off'}
+      aria-pressed={muted}
+      onClick={() => { sound.setMuted(!muted); setMuted(!muted); }}
+    >
+      <PixelIcon rows={muted ? SPEAKER_OFF : SPEAKER_ON} legend={SPEAKER_LEGEND} size={2} />
+    </button>
+  );
+};
 
 export const Hud = ({ day, me }: { day: DayDto; me: MeDto }) => (
   <header className="hud">
@@ -13,10 +29,13 @@ export const Hud = ({ day, me }: { day: DayDto; me: MeDto }) => (
       </span>
     </div>
     <div className="hud-right">
-      <div className="candles" aria-label={`${me.candles} of ${CANDLES_PER_DAY} candles left`}>
+      <div className="hud-row">
+        <MuteButton />
+        <div className="candles" aria-label={`${me.candles} of ${CANDLES_PER_DAY} candles left`}>
         {Array.from({ length: CANDLES_PER_DAY }, (_, k) => (
           <PixelIcon key={k} rows={k < me.candles ? CANDLE_LIT : CANDLE_OUT} legend={CANDLE_LEGEND} size={3} />
         ))}
+        </div>
       </div>
       <span className="hud-sub">
         <b className="num-fallen">{day.fallen}</b> fallen · <b className="num-crossed">{day.crossed}</b> crossed

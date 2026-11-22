@@ -81,6 +81,10 @@ body {
 .tier-brutal { color: var(--red2); }
 .num-crossed { color: var(--warm5); }
 .candles { display: flex; gap: 4px; }
+.hud-row { display: flex; align-items: center; gap: 12px; }
+.mute { background: none; border: 0; padding: 4px; cursor: pointer; line-height: 0; opacity: 0.85; }
+.mute:hover { opacity: 1; }
+.mute:focus-visible { outline: 2px solid var(--warm5); outline-offset: 2px; }
 
 /* ── stage ───────────────────────────────────────── */
 .stage {

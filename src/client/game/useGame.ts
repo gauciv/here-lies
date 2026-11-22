@@ -4,6 +4,7 @@ import type { EpitaphId } from '../../shared/epitaphs';
 import type { CrossResponse, DayDto, EpitaphDto, FallResponse, GraveDto, MeDto, Vote } from '../../shared/api';
 import { loadApi, type GameApi } from '../api';
 import { isLit, type Phase } from '../engine/scene';
+import { sound } from '../engine/sound';
 
 export type Card =
   | { kind: 'none' }
@@ -123,9 +124,10 @@ export const useGame = () => {
       return;
     }
     if (card.kind !== 'none') setS((p) => ({ ...p, card: { kind: 'none' } }));
+    sound.startAmbience();
     if (phase !== 'walking') return;
     if (!isStep(player, cell)) {
-      if (card.kind === 'none') toast('Step onto a stone next to you.');
+      if (card.kind === 'none') { sound.play('deny'); toast('Step onto a stone next to you.'); }
       return;
     }
     const api = apiRef.current;
@@ -133,12 +135,14 @@ export const useGame = () => {
     path.current = [...path.current, cell];
     const walked = [...path.current];
     if (board.pits[i]) {
+      sound.play('fall');
       pendingFall.current = api.fall(day.day, walked);
       pendingFall.current.catch(() => undefined);
       setS((p) => ({ ...p, player: cell, phase: 'falling', walkedThisRun: p.walkedThisRun + 1 }));
       return;
     }
     const crossing = cell.r === 0;
+    sound.play(crossing ? 'cross' : 'step');
     if (crossing) {
       pendingCross.current = api.cross(day.day, walked);
       pendingCross.current.catch(() => undefined);
@@ -182,6 +186,7 @@ export const useGame = () => {
     const { card, day } = s;
     if (!api || !day || card.kind !== 'carve') return;
     try {
+      sound.play('carve');
       const res = await api.carve(day.day, card.i, text);
       setS((p) => {
         const next = { ...p, me: res.me, graves: putGrave(p.graves, res.grave) };
@@ -197,6 +202,7 @@ export const useGame = () => {
     const day = s.day;
     if (!api || !day) return;
     try {
+      sound.play('vote');
       const res = await api.vote(day.day, id, v);
       setS((p) => {
         const details = new Map(p.details);
