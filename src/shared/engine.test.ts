@@ -179,6 +179,46 @@ void test('arrows earn saved and fooled credit from later walkers', async () => 
   assert.equal(init.me.myArrow?.fooled, 1);
 });
 
+void test('carving can be skipped until the last candle, which must carve', async () => {
+  const e = new Engine(new MemoryStore());
+  const stone = (f: { grave: { i: number } }) => f.grave.i;
+  const f1 = await e.fall(DAY, 'sky', pitPath);
+  assert.equal(f1.me.uncarvedSkippable, true);
+  const s1 = await e.skip(DAY, 'sky', stone(f1));
+  assert.equal(s1.me.uncarved, null);
+  // the skipped stone is free again for someone else
+  const other = await e.fall(DAY, 'other', pitPath);
+  assert.equal(other.me.uncarved, stone(f1));
+  await e.carve(DAY, 'other', stone(other), arrowFor(stone(other)));
+  // sky's second fall: same stone, now taken, candles remain → nothing to carve
+  const f2 = await e.fall(DAY, 'sky', pitPath);
+  assert.equal(f2.me.uncarved, null);
+  // sky's last candle must carve: the taken stone's arrow will be replaced
+  const f3 = await e.fall(DAY, 'sky', pitPath);
+  assert.equal(f3.me.uncarved, stone(f3));
+  assert.equal(f3.me.uncarvedSkippable, false);
+  assert.equal(f3.me.uncarvedReplaces, true);
+  await assert.rejects(e.skip(DAY, 'sky', stone(f3)), /last candle/);
+  await e.carve(DAY, 'sky', stone(f3), arrowFor(stone(f3)));
+  const init = await e.init(DAY, 'other', 't3_x');
+  assert.equal(init.graves.find((g) => g.i === stone(f3))?.top?.user, 'sky');
+  assert.equal(init.me.myArrow?.crumbled, true, "the replaced arrow crumbled but kept its record");
+});
+
+void test('a slab crumbles after five walkers stand on it', async () => {
+  const e = new Engine(new MemoryStore());
+  const f = await e.fall(DAY, 'author', pitPath);
+  await e.carve(DAY, 'author', f.grave.i, arrowFor(f.grave.i));
+  for (let k = 0; k < 5; k++) {
+    // each walker stands on the slab stone on their way into the same pit
+    await e.fall(DAY, `walker${k}`, pitPath);
+  }
+  const init = await e.init(DAY, 'author', 't3_x');
+  assert.ok(!init.graves.some((g) => g.i === f.grave.i), 'crumbled slabs leave the board');
+  assert.equal(init.me.myArrow?.crumbled, true);
+  assert.equal(init.me.myArrow?.visits, 5);
+});
+
 void test('rejects forged runs', async () => {
   const e = new Engine(new MemoryStore());
   await assert.rejects(e.cross(DAY, 'dave', [{ c: 3, r: 0 }]), GameError);

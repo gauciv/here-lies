@@ -47,6 +47,11 @@ export const arrowIsTrue = (board: Board, stone: number, arrow: Direction): bool
   return inBounds(p.c, p.r) && board.pits[idx(p.c, p.r)] === true;
 };
 
+/** A slab crumbles once this many walkers (not its author) have stood on it. */
+export const CRUMBLE_AFTER = 5;
+/** Safety ceiling on arrows shown at once; the oldest crumbles past it. */
+export const MAX_ARROWS = 6;
+
 /** Author id of the dungeon's nameless dead, seeded so no day starts empty. */
 export const FORGOTTEN = '~forgotten';
 export const isForgotten = (user: string): boolean => user === FORGOTTEN;

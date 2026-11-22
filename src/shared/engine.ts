@@ -7,10 +7,10 @@
 // it counts who an arrow saved (stepped off its stone safely when it told the
 // truth) and who it fooled (fell from its stone when it lied).
 import { CANDLES_PER_DAY, ROWS, cellOf, dayNumber, generateBoard, idx, judgeRun, mulberry32, neighbors, type Cell } from './board';
-import { FORGOTTEN, arrowIsTrue, directionBetween, isAnonymous, isDirection, validDirections } from './epitaphs';
+import { CRUMBLE_AFTER, FORGOTTEN, MAX_ARROWS, arrowIsTrue, directionBetween, isAnonymous, isDirection, validDirections } from './epitaphs';
 import { canShare, shareText } from './share';
 import { pioneerFlair, pioneerScore, type Flair } from './pioneer';
-import type { CarveResponse, CrossResponse, DayDto, EpitaphDto, FallResponse, GraveDto, InitResponse, MeDto, MyArrowDto } from './api';
+import type { CarveResponse, CrossResponse, DayDto, EpitaphDto, FallResponse, GraveDto, InitResponse, MeDto, MyArrowDto, SkipResponse } from './api';
 
 export type Store = {
   get(key: string): Promise<string | undefined>;
@@ -39,7 +39,7 @@ const K = {
   falls: (d: number) => `${NS}d:${d}:falls`,
   /** deaths per slab stone */
   slabFalls: (d: number) => `${NS}d:${d}:slabfalls`,
-  /** stone → epitaph id of its single arrow */
+  /** stone → epitaph id of its active arrow ('' once it has crumbled) */
   slabArrow: (d: number) => `${NS}d:${d}:slabarrow`,
   /** stone → claim counter (first claimant carves) */
   slabClaim: (d: number) => `${NS}d:${d}:slabclaim`,
@@ -97,6 +97,8 @@ export class Engine {
       truthful: arrowIsTrue(generateBoard(day), num(e.i), arrow),
       saved: num(e.saved),
       fooled: num(e.fooled),
+      visits: num(e.visits),
+      crumbled: e.crumbled === '1',
     };
   }
 
@@ -112,6 +114,8 @@ export class Engine {
       steps: u.steps ? num(u.steps) : null,
       revealed: parseList(u.revealed),
       uncarved: u.uncarved ? num(u.uncarved) : null,
+      uncarvedSkippable: u.uncarvedSkippable === '1',
+      uncarvedReplaces: u.uncarvedReplaces === '1',
       fellInto: parseList(u.fellAt),
       streak: last >= day - 1 ? num(st.count) : 0,
       shared: u.shared === '1',
@@ -132,6 +136,7 @@ export class Engine {
       at: num(e.at),
       saved: num(e.saved),
       fooled: num(e.fooled),
+      visits: num(e.visits),
     };
   }
 
@@ -149,10 +154,25 @@ export class Engine {
     };
   }
 
+  /** The slab's arrow crumbles: it leaves the board, keeps its record, and frees the stone. */
+  private async crumble(day: number, stone: number, epId: string): Promise<void> {
+    await this.store.hSet(K.ep(day, epId), { crumbled: '1' });
+    if ((await this.store.hGet(K.slabArrow(day), String(stone))) === epId) {
+      await this.store.hSet(K.slabArrow(day), { [String(stone)]: '' });
+      await this.store.hSet(K.slabClaim(day), { [String(stone)]: '0' });
+    }
+  }
+
   private async writeArrow(day: number, stone: number, fields: Record<string, string>): Promise<string> {
     const id = String(await this.store.incrBy(K.epSeq(day), 1));
-    await this.store.hSet(K.ep(day, id), { ...fields, i: String(stone), saved: '0', fooled: '0' });
+    await this.store.hSet(K.ep(day, id), { ...fields, i: String(stone), saved: '0', fooled: '0', visits: '0' });
     await this.store.hSet(K.slabArrow(day), { [String(stone)]: id });
+    // safety ceiling: past it, the oldest arrow crumbles
+    const active = Object.entries(await this.store.hGetAll(K.slabArrow(day))).filter(([, v]) => v);
+    if (active.length > MAX_ARROWS) {
+      const [oldStone, oldId] = active.sort((x, y) => Number(x[1]) - Number(y[1]))[0]!;
+      await this.crumble(day, Number(oldStone), oldId);
+    }
     return id;
   }
 
@@ -200,8 +220,9 @@ export class Engine {
 
   async init(day: number, user: string, postId: string): Promise<InitResponse> {
     await this.ensureSeeded(day);
-    const slabs = await this.store.hGetAll(K.slabFalls(day));
-    const cells = Object.keys(slabs).map(Number).filter(Number.isInteger);
+    // only slabs that still carry an arrow are on the board
+    const arrows = await this.store.hGetAll(K.slabArrow(day));
+    const cells = Object.entries(arrows).filter(([, id]) => id).map(([cell]) => Number(cell));
     const [dayDto, me, graves] = await Promise.all([
       this.dayDto(day),
       this.me(day, user),
@@ -239,6 +260,18 @@ export class Engine {
       else continue;
       credited.add(epId);
     }
+
+    // every slab they stood on wears; at CRUMBLE_AFTER walkers it crumbles
+    const stood = new Set<number>([idx(board.start.c, board.start.r)]);
+    for (const p of path) if (!board.pits[idx(p.c, p.r)]) stood.add(idx(p.c, p.r));
+    for (const stone of stood) {
+      const epId = arrows[String(stone)];
+      if (!epId) continue;
+      const author = await this.store.hGet(K.ep(day, epId), 'user');
+      if (!author || author === user) continue;
+      const visits = await this.store.hIncrBy(K.ep(day, epId), 'visits', 1);
+      if (visits >= CRUMBLE_AFTER) await this.crumble(day, stone, epId);
+    }
   }
 
   private async assertCanWalk(day: number, user: string): Promise<MeDto> {
@@ -250,17 +283,21 @@ export class Engine {
     return me;
   }
 
-  /** Atomically: is this the player's first carving today, on a stone nobody has claimed? */
-  private async claimCarving(day: number, user: string, stone: number): Promise<boolean> {
+  /**
+   * Decide what this fall may carve, atomically. Each player carves once a day,
+   * one arrow per stone, first come. Your last candle must carve: if the stone
+   * is taken, your arrow will replace the one there.
+   */
+  private async claimCarving(day: number, user: string, stone: number, lastCandle: boolean): Promise<'carve' | 'replace' | 'none'> {
     if ((await this.store.hIncrBy(K.user(day, user), 'carveClaim', 1)) > 1) {
       await this.store.hIncrBy(K.user(day, user), 'carveClaim', -1);
-      return false;
+      return 'none';
     }
-    if ((await this.store.hIncrBy(K.slabClaim(day), String(stone), 1)) > 1) {
-      await this.store.hIncrBy(K.user(day, user), 'carveClaim', -1); // their carving is still unused
-      return false;
-    }
-    return true;
+    if ((await this.store.hIncrBy(K.slabClaim(day), String(stone), 1)) === 1) return 'carve';
+    await this.store.hIncrBy(K.slabClaim(day), String(stone), -1);
+    if (lastCandle) return 'replace';
+    await this.store.hIncrBy(K.user(day, user), 'carveClaim', -1); // their carving is still unused
+    return 'none';
   }
 
   async fall(day: number, user: string, rawPath: unknown): Promise<FallResponse> {
@@ -280,7 +317,8 @@ export class Engine {
       throw new GameError('Your candles are spent for today');
     }
     await this.recordPath(day, user, path);
-    const canCarve = await this.claimCarving(day, user, stone);
+    const lastCandle = spent >= CANDLES_PER_DAY;
+    const carving = await this.claimCarving(day, user, stone, lastCandle);
     const u = await this.store.hGetAll(K.user(day, user));
     const fellAt = parseList(u.fellAt);
     fellAt.push(pit);
@@ -288,7 +326,14 @@ export class Engine {
     diedFrom.push(stone);
     await Promise.all([
       this.store.hSet(K.user(day, user), {
-        ...(canCarve ? { uncarved: String(stone), uncarvedStep: String(outcome.steps) } : {}),
+        ...(carving !== 'none'
+          ? {
+              uncarved: String(stone),
+              uncarvedStep: String(outcome.steps),
+              uncarvedSkippable: lastCandle ? '0' : '1',
+              uncarvedReplaces: carving === 'replace' ? '1' : '0',
+            }
+          : {}),
         fellAt: JSON.stringify(fellAt),
         diedFrom: JSON.stringify(diedFrom),
       }),
@@ -306,10 +351,27 @@ export class Engine {
     if (!u.uncarved || num(u.uncarved) !== i) throw new GameError('Nothing to carve here');
     if (!validDirections(cellOf(i)).includes(arrow)) throw new GameError('That arrow points off the edge');
     if (!(await this.store.hSetNX(K.user(day, user), 'carved', '1'))) throw new GameError('Your arrow is already carved');
+    if (u.uncarvedReplaces === '1') {
+      const old = await this.store.hGet(K.slabArrow(day), String(i));
+      if (old) await this.crumble(day, i, old);
+      await this.store.hSet(K.slabClaim(day), { [String(i)]: '1' });
+    }
     const id = await this.writeArrow(day, i, { user, arrow: String(arrow), step: u.uncarvedStep ?? '0', at: String(Date.now()) });
-    await this.store.hSet(K.user(day, user), { uncarved: '', uncarvedStep: '', myEp: id });
+    await this.store.hSet(K.user(day, user), { uncarved: '', uncarvedStep: '', uncarvedSkippable: '', uncarvedReplaces: '', myEp: id });
     const [grave, me] = await Promise.all([this.grave(day, i, user), this.me(day, user)]);
     return { type: 'carve', grave, me };
+  }
+
+  /** Leave no arrow on this fall (allowed until your last candle). */
+  async skip(day: number, user: string, i: number): Promise<SkipResponse> {
+    const u = await this.store.hGetAll(K.user(day, user));
+    if (!u.uncarved || num(u.uncarved) !== i) throw new GameError('Nothing to carve here');
+    if (u.uncarvedSkippable !== '1') throw new GameError('Your last candle must leave an arrow');
+    // release both claims so the stone, and your one carving, stay available
+    await this.store.hIncrBy(K.slabClaim(day), String(i), -1);
+    await this.store.hIncrBy(K.user(day, user), 'carveClaim', -1);
+    await this.store.hSet(K.user(day, user), { uncarved: '', uncarvedStep: '', uncarvedSkippable: '', uncarvedReplaces: '' });
+    return { type: 'skip', me: await this.me(day, user) };
   }
 
   /** Share of open pits that other real players had not yet marked, right now. */

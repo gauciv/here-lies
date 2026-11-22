@@ -13,6 +13,8 @@ export type EpitaphDto = {
   saved: number;
   /** walkers who fell from its stone while it lied */
   fooled: number;
+  /** walkers who have stood on this slab; it crumbles at CRUMBLE_AFTER */
+  visits: number;
 };
 
 /** A slab on a safe stone: wanderers stepped off it into a pit today. */
@@ -37,6 +39,8 @@ export type MyArrowDto = {
   truthful: boolean;
   saved: number;
   fooled: number;
+  visits: number;
+  crumbled: boolean;
 };
 
 export type MeDto = {
@@ -48,6 +52,10 @@ export type MeDto = {
   revealed: number[];
   /** a fall waiting for its arrow: the slab's stone index */
   uncarved: number | null;
+  /** the pending carving may be skipped (not your last candle) */
+  uncarvedSkippable: boolean;
+  /** the pending carving replaces an arrow already on that stone */
+  uncarvedReplaces: boolean;
   /** pits this player has fallen into today (their own hard-won knowledge) */
   fellInto: number[];
   streak: number;
@@ -74,6 +82,7 @@ export type CrossResponse = { type: 'cross'; me: MeDto; day: DayDto };
 export type CarveRequest = { day: number; i: number; arrow: Direction };
 export type CarveResponse = { type: 'carve'; grave: GraveDto; me: MeDto };
 
+export type SkipResponse = { type: 'skip'; me: MeDto };
 export type ShareResponse = { type: 'share'; me: MeDto };
 export type JoinResponse = { type: 'join' };
 export type FlairResponse = { type: 'flair'; text: string };
