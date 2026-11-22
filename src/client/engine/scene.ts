@@ -255,7 +255,7 @@ export class Scene {
         if (isPit) this.frameOf(x, 'hole', (p % COLS) * TILE, TOP + Math.floor(p / COLS) * TILE);
       });
     }
-    s.graves.forEach((g, i) => this.drawGrave(x, i, g, this.compactSlab(s, i)));
+    s.graves.forEach((g, i) => this.drawGrave(x, i, g));
     // numbers last; on a slab they move to the corner so the arrow stays clear
     for (const i of s.revealed) this.drawClue(x, s.board, i % COLS, Math.floor(i / COLS), s.graves.has(i));
   }
@@ -302,7 +302,7 @@ export class Scene {
   private drawClue(x: CanvasRenderingContext2D, board: Board, c: number, r: number, onSlab: boolean): void {
     const n = clue(board, c, r);
     if (n === 0) return;
-    const X = c * TILE + (onSlab ? -2 : 0), Y = TOP + r * TILE + (onSlab ? -2 : 0);
+    const X = c * TILE + (onSlab ? -5 : 0), Y = TOP + r * TILE + (onSlab ? -4 : 0);
     const sp = getSprites();
     const col: ColorKey = n >= 4 ? 'red2' : n === 3 ? 'warm4' : 'bone3';
     const dark = sp.digit(n, 'ink').canvas;
@@ -310,25 +310,9 @@ export class Scene {
     x.drawImage(sp.digit(n, col).canvas, X + 6, Y + 5);
   }
 
-  /** On a stone you've uncovered that has a number, the slab steps aside so the number stays the stone's. */
-  private compactSlab(s: SceneState, i: number): boolean {
-    return s.revealed.has(i) && clue(s.board, i % COLS, Math.floor(i / COLS)) > 0;
-  }
-
   /** A flat slab on the stone a wanderer fell from, carved with their arrow. */
-  private drawGrave(x: CanvasRenderingContext2D, i: number, g: GraveView, compact = false): void {
+  private drawGrave(x: CanvasRenderingContext2D, i: number, g: GraveView): void {
     const c = i % COLS, r = Math.floor(i / COLS);
-    if (compact) {
-      // a small marker in the corner, the number keeps the middle of the stone
-      const X = c * TILE + 8, Y = TOP + r * TILE + 8;
-      const sp = getSprites();
-      x.drawImage((g.mine ? sp.slabMiniMine : sp.slabMini).canvas, X, Y);
-      if (g.arrow !== null) {
-        const col: ColorKey = g.truth === true ? 'warm4' : g.truth === false ? 'red2' : 'ink';
-        x.drawImage(sp.arrowMini(g.arrow, col).canvas, X + 2, Y + 2);
-      }
-      return;
-    }
     const X = c * TILE + 2, Y = TOP + r * TILE + 2;
     const sp = getSprites();
     x.drawImage((g.mine ? sp.slabMine : sp.slab).canvas, X, Y);
@@ -547,12 +531,10 @@ export class Scene {
     if (s.revealAll && !this.reduced && Math.sin(t * 3) > 0.2) {
       s.graves.forEach((g, i) => {
         if (g.arrow === null) return;
-        const small = this.compactSlab(s, i);
-        const n = small ? 8 : 12;
-        const X = (i % COLS) * TILE + (small ? 8 : 2), Y = TOP + Math.floor(i / COLS) * TILE + (small ? 8 : 2);
+        const X = (i % COLS) * TILE + 2, Y = TOP + Math.floor(i / COLS) * TILE + 2;
         const col: ColorKey = g.truth ? 'warm5' : 'red2';
-        this.px(ctx, col, X, Y, n, 1); this.px(ctx, col, X, Y + n - 1, n, 1);
-        this.px(ctx, col, X, Y, 1, n); this.px(ctx, col, X + n - 1, Y, 1, n);
+        this.px(ctx, col, X, Y, 12, 1); this.px(ctx, col, X, Y + 11, 12, 1);
+        this.px(ctx, col, X, Y, 1, 12); this.px(ctx, col, X + 11, Y, 1, 12);
       });
     }
 

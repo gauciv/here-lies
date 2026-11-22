@@ -41,24 +41,11 @@ const SLAB_ROWS = [
   '.oooooooooo.',
 ] as const;
 const SLAB_LEGEND: Legend = { o: 'ink', H: 'pst4', L: 'pst3', M: 'pst2' };
-// the same slab as a small corner marker, for stones whose number must stay readable
-const SLAB_MINI_ROWS = [
-  '.oooooo.',
-  'oHHHHHHo',
-  'oHLLLLMo',
-  'oHLLLLMo',
-  'oHLLLLMo',
-  'oHLLLLMo',
-  'oMMMMMMo',
-  '.oooooo.',
-] as const;
 const SLAB_MINE_LEGEND: Legend = { o: 'ink', H: 'bone3', L: 'bone2', M: 'bone1' };
 
 // ── arrows: drawn for up and up-right, rotated for the other six ────────────
 const ARROW_UP = ['...#...', '..###..', '.#####.', '#######', '..###..', '..###..', '..###..'] as const;
 const ARROW_UP_RIGHT = ['..#####', '...####', '....###', '...####', '..###.#', '.###...', '###....'] as const;
-const ARROW_MINI_UP = ['..#..', '.###.', '#####', '..#..', '..#..'] as const;
-const ARROW_MINI_UP_RIGHT = ['.####', '...##', '..#.#', '.#..#', '#....'] as const;
 
 const rotate = (rows: readonly string[]): string[] => {
   const n = rows.length;
@@ -66,8 +53,8 @@ const rotate = (rows: readonly string[]): string[] => {
 };
 
 /** Arrow rows for a direction: 0 up, clockwise through 7 up-left. */
-export const arrowRows = (dir: number, mini = false): string[] => {
-  let rows: string[] = [...(dir % 2 === 0 ? (mini ? ARROW_MINI_UP : ARROW_UP) : (mini ? ARROW_MINI_UP_RIGHT : ARROW_UP_RIGHT))];
+export const arrowRows = (dir: number): string[] => {
+  let rows: string[] = [...(dir % 2 === 0 ? ARROW_UP : ARROW_UP_RIGHT)];
   for (let k = 0; k < Math.floor(dir / 2); k++) rows = rotate(rows);
   return rows;
 };
@@ -121,10 +108,7 @@ export type Sprites = {
   ghost: readonly [Sprite, Sprite];
   slab: Sprite;
   slabMine: Sprite;
-  slabMini: Sprite;
-  slabMiniMine: Sprite;
   arrow: (dir: number, color: ColorKey) => Sprite;
-  arrowMini: (dir: number, color: ColorKey) => Sprite;
   digit: (n: number, color: ColorKey) => Sprite;
 };
 
@@ -142,10 +126,7 @@ export const getSprites = (): Sprites => {
     ghost: [build(GHOST_A, GHOST_LEGEND), build(GHOST_B, GHOST_LEGEND)],
     slab: build(SLAB_ROWS, SLAB_LEGEND),
     slabMine: build(SLAB_ROWS, SLAB_MINE_LEGEND),
-    slabMini: build(SLAB_MINI_ROWS, SLAB_LEGEND),
-    slabMiniMine: build(SLAB_MINI_ROWS, SLAB_MINE_LEGEND),
     arrow: (dir, color) => cached(`a${dir}:${color}`, () => build(arrowRows(dir), { '#': color })),
-    arrowMini: (dir, color) => cached(`m${dir}:${color}`, () => build(arrowRows(dir, true), { '#': color })),
     digit: (n, color) => cached(`d${n}:${color}`, () => build(DIGITS[n] ?? DIGITS[8]!, { '#': color })),
   };
   return sprites;
