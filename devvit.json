@@ -44,5 +44,8 @@
         "cron": "0 0 * * *"
       }
     }
+  },
+  "dev": {
+    "subreddit": "here_lies_daily_dev"
   }
 }
