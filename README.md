@@ -1,8 +1,8 @@
 # Here Lies
 
-**A daily dungeon crossing where the dead leave notes, and some of them lie.**
+**A daily dungeon crossing where the dead carve arrows, and some of them lie.**
 
-Every day, everyone on the subreddit gets the same dark dungeon to cross. You carry a torch that lights only the stones around you. Hidden pits wait in the dark. Numbers on the stones you step on tell you how many pits are close. When someone falls, a grave marks the spot and they carve their last words for whoever comes next: *"Safe ahead."* *"Go left."* *"The numbers lie."* Those words might save you. They might be a trap. The community votes on which graves tell the truth.
+Every day, everyone on the subreddit gets the same dark dungeon to cross. You carry a torch that lights only the stones around you. Hidden pits wait in the dark. Numbers on the stones you step on tell you how many pits are close. When someone falls, a grave slab is set into the stone they last stood on, and they carve one arrow into it: *"I stepped this way and fell."* The arrow might save you. It might be a lie. The community votes on which graves tell the truth.
 
 Built for Reddit's Game of the Day Hackathon on Devvit Web.
 
@@ -14,9 +14,10 @@ Built for Reddit's Game of the Day Hackathon on Devvit Web.
 2. **Read the numbers.** A number tells you how many pits touch that stone, counting all 8 neighbours. A blank stone (with footprints) has no pits around it.
 3. **Reach the door at the far wall** to cross.
 4. You have **3 candles** a day. Falling into a pit costs one, and you start again from the stairs. The stones you already walked stay remembered.
-5. **When you fall, carve your last words.** Pick one line from a fixed list. You can tell the truth, or you can lie.
-6. **Read the graves in your torchlight.** Every grave marks a pit; each skull piled beside it means one more person fell there. Tap a grave to see its last words and judge them: **Honest** or **Liar**. Well-trusted graves earn the label *Trusted*; graves voted dishonest get a red scratch and the label *Known liar*.
-7. When you cross, or your candles run out, **the dark lifts** and you can see and judge every grave on the board. You can also choose to share your result as a comment or join the community.
+5. **When you fall, carve an arrow.** Your grave slab goes on the stone you stood on just before you fell. Pick which way the arrow points: at the pit (the truth), or anywhere else (a lie). You always see which way you really fell, so a lie is a choice.
+6. **Read the slabs in your torchlight.** A slab means *someone stepped off this stone into a pit next to it*, but which neighbour? Only the arrow says, and it may lie. Slabs are safe to stand on; stepping onto one reads it. Tap a lit slab from a distance to read it too, then judge it: **Honest** or **Liar**. Arrows the community trusts glow **gold**; arrows voted dishonest turn **red**. The more people fell from a slab, the more it cracks.
+7. **You remember your own falls.** A pit you fell into stays open for you (and only you) for the rest of the day.
+8. When you cross, or your candles run out, **the dark lifts** and you can see and judge every grave on the board. You can also choose to share your result as a comment or join the community.
 
 ### The numbers, explained
 
@@ -64,7 +65,7 @@ The day's tier is shown at the top of the game and in the post preview.
 
 ## Why it's built for Reddit
 
-- **The community is the content.** Every player who falls leaves information, true or false, for everyone after them. The board gets busier, and stranger, as the day goes on.
+- **The community is the content.** Every player who falls leaves an arrow, true or false, for everyone after them. Graves never reveal pits by themselves: the only clue is an arrow you have to decide to trust.
 - **Trust is a community verdict.** Honest and Liar votes from the subreddit decide which graves are shown as trusted and which carry the liar's mark.
 - **Same board for everyone, every day**, so the comments become a place to compare notes and argue about who lied.
 - **Optional sharing:** after your crossing you can post a spoiler-free result as a comment (you see the exact text first), and join the subreddit. Neither is ever required.
@@ -85,7 +86,7 @@ No configuration is needed. Old posts stay playable as an archive of past days, 
 
 ## Fair play and safety
 
-- **No free text.** Last words come from a fixed list of 12 lines, so there is nothing to moderate.
+- **No free text.** Last words are a single carved arrow, so there is nothing to moderate.
 - **Every walk is checked on the server.** A crossing or fall only counts if it is a real chain of single steps over the day's board.
 - **One vote per epitaph, no voting on your own words,** and candle use, crossing, carving and sharing are protected against double-submission.
 - Sharing and joining only happen when you press their buttons, following Devvit's user-action rules.
