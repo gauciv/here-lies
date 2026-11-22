@@ -118,7 +118,7 @@ export class CampScene {
     this.cued.clear();
   }
 
-  /** The dwarf without his soul: drained to ash, with black hollows for eyes. */
+  /** The dwarf without his soul: a dim, grey-green husk with black hollows for eyes. */
   private paleFrame(name: FrameName): HTMLCanvasElement | null {
     const cached = this.pale.get(name);
     if (cached) return cached;
@@ -143,13 +143,14 @@ export class CampScene {
       }
     for (let o = 0; o < d.length; o += 4) {
       if (d[o + 3] === 0 || isInk(o)) continue;
+      // a corpse, not a spirit: dim grey-green, nothing like the soul's bright blue
       const lum = 0.3 * d[o]! + 0.59 * d[o + 1]! + 0.11 * d[o + 2]!;
-      const v = 0.45 * lum + 105;
-      d[o] = v - 8; d[o + 1] = v - 2; d[o + 2] = v + 14;
+      const v = 0.38 * lum + 62;
+      d[o] = v - 4; d[o + 1] = v + 8; d[o + 2] = v - 10;
     }
     for (let k = 0; k < eyes.length; k += 2) {
       const ex = eyes[k]!, ey = eyes[k + 1]!;
-      for (const [ox, oy] of [[0, 0], [0, -1]] as const) {
+      for (const [ox, oy] of [[0, 0], [0, -1], [0, 1]] as const) {
         const o = at(ex + ox, ey + oy);
         d[o] = 6; d[o + 1] = 7; d[o + 2] = 11; d[o + 3] = 255;
       }
@@ -256,7 +257,8 @@ export class CampScene {
     let running = walk > 0 && walk < 1 || through > 0;
     if (reviving) {
       hx = lerp(HERO_DOOR.x, HERO_REST.x, bodyWalk);
-      hy = lerp(HERO_DOOR.y, HERO_REST.y, bodyWalk);
+      // a soulless, staggering walk
+      hy = lerp(HERO_DOOR.y, HERO_REST.y, bodyWalk) + (bodyWalk > 0 && bodyWalk < 1 ? Math.round(Math.abs(Math.sin(t * 5)) * 1.5) : 0);
       running = bodyWalk > 0 && bodyWalk < 1;
       facingDoor = false;
     }
@@ -348,7 +350,8 @@ export class CampScene {
     const lights: Light[] = [];
     if (torchOn) lights.push({ x: tip.x, y: tip.y, r: 30 * flick * torchFade, k: 1.1, tint: TORCH_TINT });
     if (soulAlpha > 0) lights.push({ x: soul.x + 8, y: soul.y + 12, r: 24, k: 1.0 * soulAlpha, tint: COLD });
-    if (reviving && bodyShown && colour < 1) lights.push({ x: hx + 8, y: hy + 16, r: 13, k: 0.45 * (1 - colour), tint: COLD });
+    // just enough to make out the husk in the dark: dull, colourless, unlike the soul's glow
+    if (reviving && bodyShown && colour < 1) lights.push({ x: hx + 8, y: hy + 16, r: 11, k: 0.32 * (1 - colour), tint: [0.62, 0.66, 0.6] });
     const flash = reviving ? Math.max(0, 1 - Math.abs(q - 0.84) / 0.04) : 0;
     if (flash > 0) lights.push({ x: HERO_REST.x + 8, y: HERO_REST.y + 14, r: 34, k: 1.6 * flash, tint: [1, 0.95, 0.9] });
     const breathe = this.reduced ? 0 : 1;
