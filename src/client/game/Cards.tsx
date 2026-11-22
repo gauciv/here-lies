@@ -265,7 +265,7 @@ export const IntroCard = ({ onStart }: { onStart: () => void }) => (
     <ol className="intro-steps">
       <li><span className="intro-icon intro-num">2</span><span>A number counts the pits touching that stone.</span></li>
       <li><span className="intro-icon slab-arrow slab-arrow-sm"><Arrow dir={1} color="pst1" size={3} /></span><span>The fallen carve an arrow toward their pit. Some lie.</span></li>
-      <li><span className="intro-icon intro-door" aria-hidden="true" /><span>Reach the light under the far door. You have 3 candles.</span></li>
+      <li><span className="intro-icon intro-door" aria-hidden="true" /><span>Find the door hidden somewhere in the far wall. You have 3 candles.</span></li>
     </ol>
     <div className="vote-row">
       <button className="btn btn-share" onClick={onStart}>Light the torch</button>

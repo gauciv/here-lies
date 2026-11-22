@@ -166,7 +166,7 @@ export const useGame = () => {
       setS((p) => ({ ...p, player: cell, phase: 'falling', walkedThisRun: p.walkedThisRun + 1 }));
       return;
     }
-    const crossing = cell.r === 0;
+    const crossing = cell.c === board.door.c && cell.r === board.door.r;
     sound.play(crossing ? 'cross' : 'step');
     if (crossing) {
       pendingCross.current = api.cross(day.day, walked);
@@ -324,10 +324,10 @@ export const useGame = () => {
     if (s.phase === 'crossed' || s.phase === 'idle') return s.graves.size ? 'The dark has lifted. Tap a slab to see if its arrow lied.' : '';
     if (s.phase !== 'walking') return '';
     const seen = s.revealed.size;
-    if (seen <= 1 && s.walkedThisRun === 0) return 'Reach the light under the far door. Tap a glowing stone to step.';
+    if (seen <= 1 && s.walkedThisRun === 0) return 'Find the door hidden in the far wall. Tap a glowing stone to step.';
     if (seen <= 3) return 'A number counts the pits touching that stone.';
     if (s.graves.size && seen <= 6) return 'A slab marks where someone stood before they fell. Its arrow may lie.';
-    return 'Reach the far wall.';
+    return 'Find the door in the far wall.';
   }, [s.status, s.phase, s.revealed.size, s.walkedThisRun, s.graves.size]);
 
   const startPlaying = useCallback(() => {

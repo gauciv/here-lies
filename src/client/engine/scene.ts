@@ -74,7 +74,8 @@ const HERO_W = 16;
 const HERO_H = 28;
 /** where the hero's front hand is on the (right-facing) sprite */
 const HAND = { x: 14, y: 17 };
-const DOOR_X = 40;
+/** the door leaf (32 px) is centred on the door's column */
+const doorX = (board: Board): number => board.door.c * TILE - 8;
 
 const FLOORS: readonly FrameName[] = ['floor_1', 'floor_2', 'floor_3', 'floor_4', 'floor_5', 'floor_6', 'floor_7', 'floor_8'];
 const heroFrame = (running: boolean, n: number): FrameName =>
@@ -236,7 +237,7 @@ export class Scene {
     const x = this.lctx;
     x.fillStyle = C.void0;
     x.fillRect(0, 0, SCENE_W, SCENE_H);
-    this.drawWall(x, doorOpen);
+    this.drawWall(x, s.board, doorOpen);
     const rand = mulberry32(s.board.day * 977 + 13);
     for (let r = 0; r < ROWS; r++)
       for (let c = 0; c < COLS; c++) {
@@ -258,16 +259,18 @@ export class Scene {
     for (const i of s.revealed) this.drawClue(x, s.board, i % COLS, Math.floor(i / COLS), s.graves.has(i));
   }
 
-  private drawWall(x: CanvasRenderingContext2D, doorOpen: boolean): void {
+  private drawWall(x: CanvasRenderingContext2D, board: Board, doorOpen: boolean): void {
     for (let c = 0; c < COLS; c++) {
       this.frameOf(x, 'wall_top_mid', c * TILE, 0);
       this.frameOf(x, 'wall_mid', c * TILE, 16);
     }
-    this.frameOf(x, 'wall_banner_red', 0, 16);
-    this.frameOf(x, 'wall_banner_red', 6 * TILE, 16);
-    this.frameOf(x, doorOpen ? 'doors_leaf_open' : 'doors_leaf_closed', DOOR_X, 0);
-    this.frameOf(x, 'doors_frame_left', DOOR_X - 16, 0);
-    this.frameOf(x, 'doors_frame_right', DOOR_X + 32, 0);
+    // banners hang wherever the door isn't
+    const dc = board.door.c;
+    for (const c of [0, COLS - 1]) if (Math.abs(c - dc) >= 2) this.frameOf(x, 'wall_banner_red', c * TILE, 16);
+    const dx = doorX(board);
+    this.frameOf(x, doorOpen ? 'doors_leaf_open' : 'doors_leaf_closed', dx, 0);
+    this.frameOf(x, 'doors_frame_left', dx - 16, 0);
+    this.frameOf(x, 'doors_frame_right', dx + 32, 0);
   }
 
   private drawClue(x: CanvasRenderingContext2D, board: Board, c: number, r: number, onSlab: boolean): void {
@@ -381,7 +384,7 @@ export class Scene {
     // walking through the door while crossing
     const walkK = Math.min(1, crossP / 0.5);
     const walkY = crossP > 0 ? s.player.r - walkK * 1.5 : this.pos.y;
-    const walkX = crossP > 0 ? this.pos.x + (3 - this.pos.x) * walkK : this.pos.x;
+    const walkX = crossP > 0 ? this.pos.x + (s.board.door.c - this.pos.x) * walkK : this.pos.x;
 
     const ctx = this.ctx;
     ctx.drawImage(this.layer, 0, 0);
@@ -497,20 +500,6 @@ export class Scene {
 
     // ── emissive layer ──
     const blink = (seed: number, rate: number) => hash2(Math.floor(t * rate), Math.floor(seed * 1000));
-
-    // daylight leaking around the far door's edges: the goal, visible from anywhere
-    if (crossP < 0.08) {
-      const edge: [number, number][] = [];
-      for (let y = 2; y < 32; y++) { edge.push([DOOR_X, y]); edge.push([DOOR_X + 31, y]); }
-      for (let x = DOOR_X + 2; x < DOOR_X + 30; x++) edge.push([x, 0]);
-      edge.push([DOOR_X + 1, 1], [DOOR_X + 30, 1]);
-      for (let x = DOOR_X + 1; x < DOOR_X + 31; x++) edge.push([x, 31]);
-      edge.forEach(([x, y], k) => {
-        if (!this.reduced && blink(40 + k, 3) < 0.18) return;
-        const bright = y >= 28 || blink(200 + k, 4) > 0.75;
-        this.px(ctx, bright ? 'warm6' : y > 16 ? 'warm5' : 'warm4', x, y);
-      });
-    }
 
     // once the dark lifts, slabs pulse gently so it's clear they can be read
     if (s.revealAll && !this.reduced && Math.sin(t * 3) > 0.2) {

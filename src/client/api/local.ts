@@ -33,7 +33,7 @@ const seed = async () => {
         path.push(next);
         at = next;
         if (board.pits[idx(next.c, next.r)]) outcome = 'fell';
-        else if (next.r === 0) outcome = 'crossed';
+        else if (next.c === board.door.c && next.r === board.door.r) outcome = 'crossed';
       }
       if (outcome === 'crossed') { await engine.cross(day, ghost, path); break; }
       if (outcome !== 'fell') break;
