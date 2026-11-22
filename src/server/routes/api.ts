@@ -77,6 +77,17 @@ api.post('/carve', async (c) => {
 });
 
 
+api.post('/skip', async (c) => {
+  try {
+    const body = await readBody(c);
+    const i = Number(body.i);
+    if (!Number.isInteger(i)) throw new GameError('Unknown grave');
+    return c.json(await engine.skip(dayFrom(body), await username(), i));
+  } catch (e) {
+    return fail(c, e);
+  }
+});
+
 // Posting and joining happen only from their own explicit buttons (Devvit user-action rules).
 api.post('/share', async (c) => {
   try {
