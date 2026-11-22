@@ -20,7 +20,7 @@ const MuteButton = () => {
   );
 };
 
-export const Hud = ({ day, me }: { day: DayDto; me: MeDto }) => (
+export const Hud = ({ day, me, onHelp }: { day: DayDto; me: MeDto; onHelp: () => void }) => (
   <header className="hud">
     <div className="hud-brand">
       <h1 className="logo">Here Lies</h1>
@@ -30,6 +30,7 @@ export const Hud = ({ day, me }: { day: DayDto; me: MeDto }) => (
     </div>
     <div className="hud-right">
       <div className="hud-row">
+        <button className="help" aria-label="How to play" onClick={onHelp}>?</button>
         <MuteButton />
         <div className="candles" aria-label={`${me.candles} of ${CANDLES_PER_DAY} candles left`}>
         {Array.from({ length: CANDLES_PER_DAY }, (_, k) => (

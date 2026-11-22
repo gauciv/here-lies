@@ -2,7 +2,7 @@ import './index.css';
 
 import { StrictMode, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
-import { CarveCard, CrossedCard, FellAgainCard, GraveCard, SpentCard } from './game/Cards';
+import { CarveCard, CrossedCard, FellAgainCard, GraveCard, IntroCard, SpentCard } from './game/Cards';
 import { Hud } from './game/Hud';
 import { Stage } from './game/Stage';
 import { cellOf } from '../shared/board';
@@ -11,7 +11,7 @@ import { useGame } from './game/useGame';
 import type { GraveView, SceneState } from './engine/scene';
 
 export const App = () => {
-  const { s, tap, onFallDone, onCrossDone, carve, share, join, flair, walkAgain, closeCard, hint } = useGame();
+  const { s, tap, onFallDone, onCrossDone, carve, share, join, flair, walkAgain, startPlaying, openHelp, closeCard, hint } = useGame();
 
   const scene = useMemo<SceneState | null>(() => {
     if (!s.board) return null;
@@ -47,13 +47,14 @@ export const App = () => {
 
   return (
     <main className="app">
-      {s.day && s.me ? <Hud day={s.day} me={s.me} /> : <header className="hud"><h1 className="logo">Here Lies</h1></header>}
+      {s.day && s.me ? <Hud day={s.day} me={s.me} onHelp={openHelp} /> : <header className="hud"><h1 className="logo">Here Lies</h1></header>}
       <Stage scene={scene} onTap={tap} onFallDone={onFallDone} onCrossDone={onCrossDone}>
         {s.me && s.day && (
           <div className={`card-layer ${s.player.r >= 4 && s.phase !== 'crossed' ? 'card-layer-top' : ''}`}>
             {card.kind === 'grave' && grave && s.board && (
               <GraveCard grave={grave} me={s.me} board={s.board} judged={s.phase === 'crossed' || s.phase === 'idle'} onClose={closeCard} />
             )}
+            {card.kind === 'intro' && <IntroCard onStart={startPlaying} />}
             {card.kind === 'fellAgain' && <FellAgainCard me={s.me} reason={card.reason} onWalk={walkAgain} />}
             {card.kind === 'carve' && (
               <CarveCard me={s.me} step={carveStep} stone={cellOf(card.i)} fellToward={directionBetween(cellOf(card.i), s.player)} onCarve={carve} />

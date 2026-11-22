@@ -20,42 +20,53 @@ const subredditName = (): string | null => {
 
 type Social = { onShare: () => Promise<boolean>; onJoin: () => Promise<boolean> };
 
-/** Explicit opt-in: wear today's pioneer title as subreddit flair. */
-const FlairButton = ({ title, onFlair }: { title: string; onFlair: () => Promise<boolean> }) => {
-  const [state, setState] = useState<'idle' | 'busy' | 'done'>('idle');
-  return (
-    <button className="btn btn-flair" disabled={state !== 'idle'} onClick={async () => { setState('busy'); setState((await onFlair()) ? 'done' : 'idle'); }}>
-      {state === 'done' ? `Wearing “${title}”` : state === 'busy' ? 'Setting flair…' : `Wear “${title}” as flair`}
-    </button>
-  );
-};
-
-/** Optional, explicit actions: preview the comment, post it; separately, join. */
-const ShareBlock = ({ me, day, onShare, onJoin }: { me: MeDto; day: DayDto } & Social) => {
-  const [busy, setBusy] = useState<'share' | 'join' | null>(null);
+/**
+ * End-of-run actions. Sharing is two explicit steps (preview, then post);
+ * flair and joining sit behind "More". Nothing here is ever required.
+ */
+const EndActions = ({ me, day, onShare, onJoin, onFlair }: { me: MeDto; day: DayDto; onFlair?: (() => Promise<boolean>) | undefined } & Social) => {
+  const [stage, setStage] = useState<'idle' | 'preview' | 'posting'>('idle');
+  const [more, setMore] = useState(false);
   const [joined, setJoined] = useState(false);
-  const text = shareText(day.day, me);
+  const [flaired, setFlaired] = useState(false);
+  const [busy, setBusy] = useState(false);
   const sub = subredditName();
+  const title = me.pioneer !== null ? pioneerTitle(me.pioneer) : null;
   return (
     <div className="share">
       {me.shared ? (
         <p className="share-done">Your result is in the comments.</p>
-      ) : (
-        <>
-          <p className="share-label">Post this as a comment?</p>
-          <blockquote className="share-preview">{text.replace(/\*\*/g, '')}</blockquote>
-        </>
+      ) : stage === 'idle' ? null : (
+        <blockquote className="share-preview">{shareText(day.day, me).replace(/\*\*/g, '')}</blockquote>
       )}
       <div className="vote-row">
-        {!me.shared && (
-          <button className="btn btn-share" disabled={busy !== null} onClick={async () => { setBusy('share'); await onShare(); setBusy(null); }}>
-            {busy === 'share' ? 'Posting…' : 'Post comment'}
-          </button>
+        {!me.shared && stage === 'idle' && (
+          <button className="btn btn-share" onClick={() => setStage('preview')}>Share result</button>
         )}
-        <button className="btn" disabled={busy !== null || joined} onClick={async () => { setBusy('join'); setJoined(await onJoin()); setBusy(null); }}>
-          {joined ? 'Joined' : sub ? `Join r/${sub}` : 'Join the community'}
-        </button>
+        {!me.shared && stage !== 'idle' && (
+          <>
+            <button className="btn btn-share" disabled={stage === 'posting'} onClick={async () => { setStage('posting'); if (!(await onShare())) setStage('preview'); }}>
+              {stage === 'posting' ? 'Posting…' : 'Post comment'}
+            </button>
+            <button className="btn" disabled={stage === 'posting'} onClick={() => setStage('idle')}>Cancel</button>
+          </>
+        )}
+        {stage === 'idle' && (
+          <button className="btn btn-more" aria-expanded={more} onClick={() => setMore(!more)}>{more ? 'Less' : 'More'}</button>
+        )}
       </div>
+      {more && stage === 'idle' && (
+        <div className="vote-row">
+          {onFlair && title && (
+            <button className="btn" disabled={busy || flaired} onClick={async () => { setBusy(true); setFlaired(await onFlair()); setBusy(false); }}>
+              {flaired ? `Wearing “${title}”` : `Wear “${title}” as flair`}
+            </button>
+          )}
+          <button className="btn" disabled={busy || joined} onClick={async () => { setBusy(true); setJoined(await onJoin()); setBusy(false); }}>
+            {joined ? 'Joined' : sub ? `Join r/${sub}` : 'Join the community'}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
@@ -195,20 +206,13 @@ export const CarveCard = ({ me, step, stone, fellToward, onCarve }: {
 
 export const CrossedCard = ({ me, day, onClose, onShare, onJoin, onFlair }: { me: MeDto; day: DayDto; onClose: () => void; onFlair: () => Promise<boolean> } & Social) => {
   const countdown = useCountdown(day.day);
+  const title = me.pioneer !== null ? pioneerTitle(me.pioneer) : null;
   return (
     <section className="card card-win" aria-label="You crossed">
       <button className="card-close" onClick={onClose} aria-label="Close">×</button>
-      <p className="card-kicker">The far wall</p>
+      <p className="card-kicker">The far wall{me.rank ? ` · ${ordinal(me.rank)} across today` : ''}</p>
       <p className="epitaph">You crossed.</p>
-      {me.pioneer !== null && (
-        <p className="pioneer">
-          <span className="pioneer-title">{pioneerTitle(me.pioneer)}</span>
-          <span className="card-meta">
-            {me.pioneer}% of the pits were still unmapped when you crossed{me.rank ? `, ${ordinal(me.rank)} across today` : ''}.
-          </span>
-          <FlairButton title={pioneerTitle(me.pioneer)} onFlair={onFlair} />
-        </p>
-      )}
+      {title && <p className="pioneer-title">{title}</p>}
       <dl className="stats">
         <div><dt>Pioneer</dt><dd>{me.pioneer !== null ? `${me.pioneer}%` : '—'}</dd></div>
         <div><dt>Steps</dt><dd>{me.steps ?? '—'}</dd></div>
@@ -216,8 +220,8 @@ export const CrossedCard = ({ me, day, onClose, onShare, onJoin, onFlair }: { me
         <div><dt>Streak</dt><dd>{me.streak}</dd></div>
       </dl>
       {me.myArrow && <ArrowRecord mine={me.myArrow} />}
-      <ShareBlock me={me} day={day} onShare={onShare} onJoin={onJoin} />
-      <p className="card-foot">{day.fallen} lie behind you. A new crossing opens in {countdown}.</p>
+      <EndActions me={me} day={day} onShare={onShare} onJoin={onJoin} onFlair={onFlair} />
+      <p className="card-foot">Pioneer: share of pits nobody had found when you crossed. New crossing in {countdown}.</p>
     </section>
   );
 };
@@ -229,10 +233,26 @@ export const SpentCard = ({ me, day, onClose, onShare, onJoin }: { me: MeDto; da
       <button className="card-close" onClick={onClose} aria-label="Close">×</button>
       <p className="card-kicker">Your candles are spent</p>
       <p className="epitaph">Rest now.</p>
-      <p className="card-meta">The dark has lifted: every pit is shown, and every arrow is revealed as truth or lie. Tap any slab.</p>
+      <p className="card-meta">The dark has lifted: every pit is shown, and every arrow is revealed as truth or lie.</p>
       {me.myArrow && <ArrowRecord mine={me.myArrow} />}
-      <ShareBlock me={me} day={day} onShare={onShare} onJoin={onJoin} />
+      <EndActions me={me} day={day} onShare={onShare} onJoin={onJoin} />
       <p className="card-foot">{day.crossed} crossed · {day.fallen} fell · new crossing in {countdown}</p>
     </section>
   );
 };
+
+/** Shown once on a player's first visit, and from the "?" in the top bar. */
+export const IntroCard = ({ onStart }: { onStart: () => void }) => (
+  <section className="card card-intro" aria-label="How to play">
+    <p className="card-kicker">How it works</p>
+    <p className="epitaph">Cross the dark.</p>
+    <ol className="intro-steps">
+      <li><span className="intro-icon intro-num">2</span><span>A number counts the pits touching that stone.</span></li>
+      <li><span className="intro-icon slab-arrow slab-arrow-sm"><Arrow dir={1} color="pst1" size={3} /></span><span>The fallen carve an arrow toward their pit. Some lie.</span></li>
+      <li><span className="intro-icon intro-door" aria-hidden="true" /><span>Reach the light under the far door. You have 3 candles.</span></li>
+    </ol>
+    <div className="vote-row">
+      <button className="btn btn-share" onClick={onStart}>Light the torch</button>
+    </div>
+  </section>
+);

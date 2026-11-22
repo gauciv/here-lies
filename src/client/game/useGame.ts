@@ -8,6 +8,7 @@ import { sound } from '../engine/sound';
 
 export type Card =
   | { kind: 'none' }
+  | { kind: 'intro' }
   | { kind: 'grave'; i: number }
   | { kind: 'carve'; i: number }
   | { kind: 'fellAgain'; reason: 'carvedToday' | 'stoneTaken' }
@@ -30,6 +31,23 @@ export type GameState = {
 };
 
 const startIdx = idx(START.c, START.r);
+const INTRO_KEY = 'herelies:intro-seen';
+
+const introSeen = (): boolean => {
+  try {
+    return window.localStorage.getItem(INTRO_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const markIntroSeen = (): void => {
+  try {
+    window.localStorage.setItem(INTRO_KEY, '1');
+  } catch {
+    /* a per-viewer convenience only */
+  }
+};
 
 export const useGame = () => {
   const apiRef = useRef<GameApi | null>(null);
@@ -73,7 +91,7 @@ export const useGame = () => {
         const board = generateBoard(init.day.day);
         const me = init.me;
         const phase: Phase = me.crossed ? 'crossed' : me.uncarved !== null ? 'fallen' : me.candles <= 0 ? 'idle' : 'walking';
-        const card: Card = me.crossed ? { kind: 'crossed' } : me.uncarved !== null ? { kind: 'carve', i: me.uncarved } : me.candles <= 0 ? { kind: 'spent' } : { kind: 'none' };
+        const card: Card = me.crossed ? { kind: 'crossed' } : me.uncarved !== null ? { kind: 'carve', i: me.uncarved } : me.candles <= 0 ? { kind: 'spent' } : introSeen() ? { kind: 'none' } : { kind: 'intro' };
         setS((p) => ({
           ...p,
           status: 'ready',
@@ -104,6 +122,7 @@ export const useGame = () => {
     const i = idx(cell.c, cell.r);
     const g = graves.get(i);
     const darkLifted = phase === 'crossed' || phase === 'idle';
+    if (card.kind === 'intro') markIntroSeen();
     if (card.kind !== 'none') setS((p) => ({ ...p, card: { kind: 'none' } }));
     sound.startAmbience();
     if (phase === 'walking' && isStep(player, cell)) {
@@ -251,9 +270,18 @@ export const useGame = () => {
     return 'Reach the far wall.';
   }, [s.status, s.phase, s.revealed.size, s.walkedThisRun, s.graves.size]);
 
+  const startPlaying = useCallback(() => {
+    markIntroSeen();
+    setS((p) => (p.card.kind === 'intro' ? { ...p, card: { kind: 'none' } } : p));
+  }, []);
+
+  const openHelp = useCallback(() => {
+    setS((p) => (p.card.kind === 'carve' ? p : { ...p, card: { kind: 'intro' } }));
+  }, []);
+
   const walkAgain = useCallback(() => {
     setS((p) => (p.card.kind === 'fellAgain' ? resetRun(p) : p));
   }, []);
 
-  return { s, tap, onFallDone, onCrossDone, carve, share, join, flair, walkAgain, closeCard, hint };
+  return { s, tap, onFallDone, onCrossDone, carve, share, join, flair, walkAgain, startPlaying, openHelp, closeCard, hint };
 };
