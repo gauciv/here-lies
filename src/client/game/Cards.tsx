@@ -3,6 +3,7 @@ import { CANDLES_PER_DAY, dayStartUtc } from '../../shared/board';
 import { EPITAPHS, epitaphText, isForgotten, verdictOf, type EpitaphId, type Verdict } from '../../shared/epitaphs';
 import type { DayDto, EpitaphDto, GraveDto, MeDto, Vote } from '../../shared/api';
 import { shareText } from '../../shared/share';
+import { pioneerTitle } from '../../shared/pioneer';
 import { context } from '@devvit/web/client';
 
 const subredditName = (): string | null => {
@@ -162,8 +163,16 @@ export const CrossedCard = ({ me, day, onClose, onShare, onJoin }: { me: MeDto; 
       <button className="card-close" onClick={onClose} aria-label="Close">×</button>
       <p className="card-kicker">The far wall</p>
       <p className="epitaph">You crossed.</p>
+      {me.pioneer !== null && (
+        <p className="pioneer">
+          <span className="pioneer-title">{pioneerTitle(me.pioneer)}</span>
+          <span className="card-meta">
+            {me.pioneer}% of the pits were still unmapped when you crossed{me.rank ? `, ${ordinal(me.rank)} across today` : ''}.
+          </span>
+        </p>
+      )}
       <dl className="stats">
-        <div><dt>Arrived</dt><dd>{me.rank ? ordinal(me.rank) : '—'}</dd></div>
+        <div><dt>Pioneer</dt><dd>{me.pioneer !== null ? `${me.pioneer}%` : '—'}</dd></div>
         <div><dt>Steps</dt><dd>{me.steps ?? '—'}</dd></div>
         <div><dt>Candles</dt><dd>{me.candles}/{CANDLES_PER_DAY}</dd></div>
         <div><dt>Streak</dt><dd>{me.streak}</dd></div>
