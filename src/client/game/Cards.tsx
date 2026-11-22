@@ -117,36 +117,29 @@ export const GraveCard = ({ grave, me, board, judged, onClose }: {
   grave: GraveDto; me: MeDto; board: Board; judged: boolean; onClose: () => void;
 }) => {
   const top = grave.top;
-  const fellHere = grave.falls === 1 ? '1 fell from this stone' : `${grave.falls} fell from this stone`;
   const truth = top && judged ? arrowIsTrue(board, grave.i, top.arrow) : null;
+  if (!top) return null;
+  const left = Math.max(1, CRUMBLE_AFTER - top.visits);
   return (
-    <section className="card" aria-label="Grave slab">
+    <section className="card card-grave" aria-label="Grave slab">
       <button className="card-close" onClick={onClose} aria-label="Close">×</button>
-      {top ? (
-        <>
+      <div className="grave-head">
+        <span className="slab-arrow"><Arrow dir={top.arrow} color={truth === true ? 'warm4' : truth === false ? 'red2' : 'pst1'} size={5} /></span>
+        <div className="grave-title">
           <p className="card-kicker">Here lies {who(top.user, me)}</p>
-          <div className="slab-read">
-            <span className="slab-arrow"><Arrow dir={top.arrow} color={truth === true ? 'warm4' : truth === false ? 'red2' : 'pst1'} size={6} /></span>
-            <p className="epitaph">“The pit is {directionName(top.arrow)}.”</p>
-          </div>
-          {truth !== null ? (
-            <p className={`stamp ${truth ? 'stamp-true' : 'stamp-lie'}`}>
-              {truth ? `True · saved ${times(top.saved)}` : `A lie · fooled ${times(top.fooled)}`}
-            </p>
-          ) : (
-            <p className="card-meta">Is it the truth? You'll know when your run is over.</p>
-          )}
-          <p className="card-foot">
-            {fellHere}{isForgotten(top.user) ? ' · long before today' : ` · on step ${top.step}`}
-            {top.visits > 0 && ` · crumbles after ${times(Math.max(1, CRUMBLE_AFTER - top.visits))} more`}
-          </p>
-        </>
-      ) : (
-        <>
-          <p className="card-kicker">{fellHere}</p>
-          <p className="epitaph epitaph-silent">Nothing is carved here.</p>
-        </>
-      )}
+          <p className="epitaph">“The pit is {directionName(top.arrow)}.”</p>
+        </div>
+      </div>
+      <ul className="tags" aria-label="About this slab">
+        {truth === null ? (
+          <li className="tag tag-hidden">Truth: after your run</li>
+        ) : (
+          <li className={`tag ${truth ? 'tag-true' : 'tag-lie'}`}>{truth ? `True · saved ${top.saved}` : `Lie · fooled ${top.fooled}`}</li>
+        )}
+        <li className="tag">{grave.falls} fell here</li>
+        <li className="tag">{isForgotten(top.user) ? 'Long ago' : `Step ${top.step}`}</li>
+        <li className={`tag${left <= 2 ? ' tag-worn' : ''}`}>Crumbles in {left}</li>
+      </ul>
     </section>
   );
 };
@@ -178,38 +171,42 @@ export const CarveCard = ({ me, step, stone, fellToward, onCarve, onSkip }: {
   const valid = validDirections(stone);
   return (
     <section className="card card-carve" aria-label="Carve your arrow">
-      <p className="card-kicker">{me.uncarvedSkippable ? 'Here lies you' : 'Your last candle'}</p>
+      <p className="card-kicker">{me.uncarvedSkippable ? 'Here lies you' : 'Your last candle'}{step ? ` · step ${step}` : ''}</p>
       <p className="epitaph">{fellToward !== null ? `You fell ${directionName(fellToward)}.` : 'The stone gave way.'}</p>
-      <p className="card-meta">
-        {me.uncarvedReplaces
-          ? 'Someone already carved this stone. Your arrow replaces theirs, and the old one crumbles.'
-          : `Carve an arrow on the stone you stood on${step ? ` (step ${step})` : ''}. Point at the pit, or lie.`}
-      </p>
-      <div className="compass" role="group" aria-label="Choose an arrow">
-        {COMPASS.map((d, k) =>
-          d === null ? (
-            <span key={k} className="compass-core" aria-hidden="true" />
-          ) : (
-            <button
-              key={k}
-              className={`btn btn-compass${d === fellToward ? ' is-truth' : ''}`}
-              disabled={busy || !valid.includes(d)}
-              aria-label={`Carve an arrow pointing ${directionName(d)}${d === fellToward ? ' (the truth)' : ''}`}
-              onClick={() => { setBusy(true); onCarve(d); }}
-            >
-              <Arrow dir={d} color={valid.includes(d) ? 'ink' : 'pst2'} size={4} />
-            </button>
-          )
-        )}
-      </div>
-      {me.uncarvedSkippable ? (
-        <div className="carve-skip">
-          <button className="btn" disabled={busy} onClick={() => { setBusy(true); onSkip(); }}>Skip for now</button>
-          <p className="card-foot">You carve once a day. Skip, and you can carve on a later fall; your last candle must carve.</p>
+      <div className="carve-body">
+        <div className="compass" role="group" aria-label="Choose an arrow">
+          {COMPASS.map((d, k) =>
+            d === null ? (
+              <span key={k} className="compass-core" aria-hidden="true" />
+            ) : (
+              <button
+                key={k}
+                className={`btn btn-compass${d === fellToward ? ' is-truth' : ''}`}
+                disabled={busy || !valid.includes(d)}
+                aria-label={`Carve an arrow pointing ${directionName(d)}${d === fellToward ? ' (the truth)' : ''}`}
+                onClick={() => { setBusy(true); onCarve(d); }}
+              >
+                <Arrow dir={d} color={valid.includes(d) ? 'ink' : 'pst2'} size={3} />
+              </button>
+            )
+          )}
         </div>
-      ) : (
-        <p className="card-foot">You must leave your mark before the dark takes you.</p>
-      )}
+        <div className="carve-side">
+          <p className="card-meta">
+            {me.uncarvedReplaces
+              ? 'This stone already has an arrow. Yours replaces it.'
+              : 'Carve an arrow where you stood. Point at the pit, or lie.'}
+          </p>
+          {me.uncarvedSkippable ? (
+            <>
+              <button className="btn" disabled={busy} onClick={() => { setBusy(true); onSkip(); }}>Skip for now</button>
+              <p className="card-foot">One arrow a day. Your last candle must carve.</p>
+            </>
+          ) : (
+            <p className="card-foot">You must leave your mark.</p>
+          )}
+        </div>
+      </div>
     </section>
   );
 };
