@@ -11,7 +11,7 @@ import { useGame } from './game/useGame';
 import type { GraveView, SceneState } from './engine/scene';
 
 export const App = () => {
-  const { s, tap, onFallDone, onCrossDone, carve, selectArrow, skip, share, join, flair, walkAgain, startPlaying, openHelp, closeCard, hint } = useGame();
+  const { s, tap, onFallDone, onCrossDone, carve, selectArrow, skip, share, join, flair, walkAgain, openResult, startPlaying, openHelp, closeCard, hint } = useGame();
 
   const scene = useMemo<SceneState | null>(() => {
     if (!s.board) return null;
@@ -76,7 +76,12 @@ export const App = () => {
         )}
         {s.toast && <div className="toast" role="status">{s.toast}</div>}
       </Stage>
-      <footer className="hint" aria-live="polite">{s.status === 'loading' ? 'Lighting the torch…' : hint}</footer>
+      <footer className="hint" aria-live="polite">
+        <span>{s.status === 'loading' ? 'Lighting the torch…' : hint}</span>
+        {(s.phase === 'crossed' || s.phase === 'idle') && s.card.kind === 'none' && s.me && (
+          <button className="btn btn-share btn-result" onClick={openResult}>Your result</button>
+        )}
+      </footer>
     </main>
   );
 };

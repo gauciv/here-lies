@@ -339,9 +339,14 @@ export const useGame = () => {
     setS((p) => (p.card.kind === 'carve' ? p : { ...p, card: { kind: 'intro' } }));
   }, []);
 
+  /** Bring back the end-of-run card after it was closed. */
+  const openResult = useCallback(() => {
+    setS((p) => (p.phase === 'crossed' ? { ...p, card: { kind: 'crossed' } } : p.phase === 'idle' ? { ...p, card: { kind: 'spent' } } : p));
+  }, []);
+
   const walkAgain = useCallback(() => {
     if (s.card.kind === 'fellAgain') respawn();
   }, [s.card.kind, respawn]);
 
-  return { s, tap, onFallDone, onCrossDone, carve, selectArrow, skip, share, join, flair, walkAgain, startPlaying, openHelp, closeCard, hint };
+  return { s, tap, onFallDone, onCrossDone, carve, selectArrow, skip, share, join, flair, walkAgain, openResult, startPlaying, openHelp, closeCard, hint };
 };

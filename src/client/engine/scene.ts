@@ -512,7 +512,18 @@ export class Scene {
       });
     }
 
-    // carving: your ghost on the slab, and a preview of the arrow being considered
+    // once the dark lifts, slabs pulse gently so it's clear they can be read
+    if (s.revealAll && !this.reduced && Math.sin(t * 3) > 0.2) {
+      s.graves.forEach((g, i) => {
+        if (g.arrow === null) return;
+        const X = (i % COLS) * TILE + 2, Y = TOP + Math.floor(i / COLS) * TILE + 2;
+        const col: ColorKey = g.truth ? 'warm5' : 'red2';
+        this.px(ctx, col, X, Y, 12, 1); this.px(ctx, col, X, Y + 11, 12, 1);
+        this.px(ctx, col, X, Y, 1, 12); this.px(ctx, col, X + 11, Y, 1, 12);
+      });
+    }
+
+        // carving: your ghost on the slab, and a preview of the arrow being considered
     if (s.carvePreview) this.drawCarvePreview(ctx, s.carvePreview.stone, s.carvePreview.dir, t);
     if (s.ghost) this.drawGhost(ctx, hx, hy, flip, t);
 
