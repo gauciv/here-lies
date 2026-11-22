@@ -21,6 +21,8 @@ export type GraveView = {
   mine: boolean;
   /** only once the dark lifts: did the arrow tell the truth? */
   truth: boolean | null;
+  /** walkers who have stood on it so far; it cracks as they add up */
+  wear: number;
 };
 
 export type Phase = 'walking' | 'falling' | 'fallen' | 'crossing' | 'crossed' | 'idle';
@@ -51,6 +53,8 @@ export type SceneEvents = {
 };
 
 type Mote = { x: number; y: number; vx: number; vy: number; life: number; seed: number };
+type Shatter = { x: number; y: number; t0: number };
+const SHATTER_MS = 1100;
 
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
 const FALL_MS = 900;
@@ -102,6 +106,7 @@ export class Scene {
   private lastPhase: Phase = 'idle';
   private motes: Mote[] = [];
   private embers: Mote[] = [];
+  private shatters: Shatter[] = [];
   private raf = 0;
   private torchGlow = 1;
   private dawn = 0;
@@ -153,6 +158,14 @@ export class Scene {
       this.phaseT0 = now;
       this.lastPhase = next.phase;
     }
+    // a slab that just vanished mid-walk crumbled under someone's feet
+    if (prev && next.phase === 'walking' && !this.reduced) {
+      prev.graves.forEach((g, i) => {
+        if (g.arrow !== null && !next.graves.has(i)) {
+          this.shatters.push({ x: (i % COLS) * TILE + 8, y: TOP + Math.floor(i / COLS) * TILE + 8, t0: now });
+        }
+      });
+    }
   }
 
   start(): void {
@@ -202,7 +215,7 @@ export class Scene {
     if (!this.atlas) return;
     let key = `${s.board.day}|${doorOpen ? 1 : 0}|${[...s.revealed].sort((a, b) => a - b).join(',')}|${[...s.knownPits].join(',')}|`;
     key += s.revealAll ? 'R|' : '';
-    s.graves.forEach((g, i) => { key += `${i}:${g.arrow}:${g.truth}:${g.mine ? 1 : 0};`; });
+    s.graves.forEach((g, i) => { key += `${i}:${g.arrow}:${g.truth}:${g.wear}:${g.mine ? 1 : 0};`; });
     if (key === this.layerKey) return;
     this.layerKey = key;
     const x = this.lctx;
@@ -255,6 +268,15 @@ export class Scene {
     const X = c * TILE + 2, Y = TOP + r * TILE + 2;
     const sp = getSprites();
     x.drawImage((g.mine ? sp.slabMine : sp.slab).canvas, X, Y);
+    // wear: every walker who stands here cracks it a little more
+    if (g.wear >= 1) { this.px(x, 'ink', X + 8, Y + 1); this.px(x, 'ink', X + 9, Y + 2); }
+    if (g.wear >= 2) { this.px(x, 'ink', X + 9, Y + 3); this.px(x, 'ink', X + 8, Y + 4); this.px(x, 'ink', X + 8, Y + 5); }
+    if (g.wear >= 3) { this.px(x, 'ink', X + 1, Y + 8); this.px(x, 'ink', X + 2, Y + 9); this.px(x, 'ink', X + 3, Y + 9); this.px(x, 'ink', X + 4, Y + 10); }
+    if (g.wear >= 4) { // about to go: chipped corners
+      this.px(x, 'void0', X + 10, Y, 2, 1); this.px(x, 'void0', X + 11, Y + 1, 1, 1);
+      this.px(x, 'void0', X, Y + 10, 1, 2); this.px(x, 'void0', X + 1, Y + 11, 1, 1);
+      this.px(x, 'pst2', X + 9, Y + 1, 2, 1);
+    }
     if (g.arrow !== null) {
       // plain carving while you walk; gold for truth, red for a lie once the dark lifts
       const col: ColorKey = g.truth === true ? 'warm4' : g.truth === false ? 'red2' : 'pst1';
@@ -309,6 +331,30 @@ export class Scene {
       const rr = 2 + Math.min(1, fallP / 0.5) * 6;
       ctx.fillStyle = C.ink;
       ctx.beginPath(); ctx.ellipse(fx, fy, rr, rr * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // shattering slabs: fragments burst out and fall, dust drifts and settles
+    this.shatters = this.shatters.filter((sh) => now - sh.t0 < SHATTER_MS);
+    for (const sh of this.shatters) {
+      const p = (now - sh.t0) / SHATTER_MS;
+      if (p < 0.12) { // the instant it gives: a bright crack across the slab
+        this.px(ctx, 'pst4', sh.x - 5, sh.y - 1, 10, 1);
+        this.px(ctx, 'pst4', sh.x - 1, sh.y - 5, 1, 10);
+      }
+      for (let k = 0; k < 12; k++) { // chunks of slab burst out, arc and fall
+        const a = (k / 12) * Math.PI * 2 + hash2(k, 7) * 0.6;
+        const v = 7 + hash2(k, 3) * 8;
+        const fx = sh.x + Math.cos(a) * v * p;
+        const fy = sh.y + Math.sin(a) * v * p * 0.7 - Math.sin(p * Math.PI) * 4 + p * p * 12;
+        const col: ColorKey = k % 3 === 0 ? 'pst4' : k % 3 === 1 ? 'pst3' : 'pst2';
+        const size = k % 3 === 2 ? 1 : 2;
+        if (p < 0.9) this.px(ctx, col, Math.round(fx), Math.round(fy), size, size);
+      }
+      for (let k = 0; k < 16; k++) { // a dust cloud that swells, rises and thins
+        if (hash2(k, Math.floor(p * 14)) > 1.05 - p) continue;
+        const dx = (hash2(k, 11) - 0.5) * 16 * (0.3 + p), dy = -p * 7 + (hash2(k, 13) - 0.5) * 8;
+        this.px(ctx, k % 2 ? 'pst2' : 'pst1', Math.round(sh.x + dx), Math.round(sh.y + dy));
+      }
     }
 
     // hero

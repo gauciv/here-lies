@@ -1,7 +1,7 @@
 // All sound is synthesised with WebAudio: no files, nothing to license, tiny.
 // Audio only starts after the player's first tap (browser autoplay rules).
 
-type Cue = 'step' | 'fall' | 'carve' | 'vote' | 'cross' | 'deny';
+type Cue = 'step' | 'fall' | 'carve' | 'vote' | 'cross' | 'deny' | 'crumble';
 
 const MUTE_KEY = 'herelies:muted';
 
@@ -109,6 +109,15 @@ class Sound {
       case 'vote':
         this.burst(t, 0.04, 1800, 2, 0.2, 'bandpass');
         this.tone(t, 0.12, 660, 0.06, 'triangle');
+        break;
+      case 'crumble': // a crack, then grit and pebbles settling, then dust
+        this.burst(t, 0.07, 1800, 1.5, 0.4, 'bandpass');
+        this.tone(t, 0.12, 140, 0.12, 'triangle', 70);
+        for (let k = 0; k < 9; k++) {
+          const at = t + 0.06 + k * 0.045 + Math.random() * 0.03;
+          this.burst(at, 0.03 + Math.random() * 0.03, 900 + Math.random() * 1600, 2.5, 0.12 + Math.random() * 0.1, 'bandpass');
+        }
+        this.burst(t + 0.15, 0.6, 500, 0.5, 0.12);
         break;
       case 'deny':
         this.tone(t, 0.12, 180, 0.08, 'square', 140);
