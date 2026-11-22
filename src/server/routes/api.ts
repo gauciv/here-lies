@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { context, reddit } from '@devvit/web/server';
 import { Engine, GameError } from '../../shared/engine';
-import type { ErrorResponse } from '../../shared/api';
+import type { ErrorResponse, JoinResponse, ShareResponse } from '../../shared/api';
 import { redisStore } from '../core/redisStore';
 import { postDay } from '../core/post';
 
@@ -73,6 +73,36 @@ api.post('/vote', async (c) => {
     const body = await readBody(c);
     if (typeof body.id !== 'string') throw new GameError('Unknown epitaph');
     return c.json(await engine.vote(dayFrom(body), await username(), body.id, body.vote));
+  } catch (e) {
+    return fail(c, e);
+  }
+});
+
+// Posting and joining happen only from their own explicit buttons (Devvit user-action rules).
+api.post('/share', async (c) => {
+  try {
+    const body = await readBody(c);
+    const day = dayFrom(body);
+    const user = await username();
+    const { postId } = context;
+    if (!postId) throw new GameError('Open the game from its post');
+    const text = await engine.claimShare(day, user);
+    try {
+      await reddit.submitComment({ id: postId, text, runAs: 'USER' });
+    } catch (e) {
+      await engine.confirmShare(day, user, false);
+      throw e;
+    }
+    return c.json<ShareResponse>({ type: 'share', me: await engine.confirmShare(day, user, true) });
+  } catch (e) {
+    return fail(c, e);
+  }
+});
+
+api.post('/join', async (c) => {
+  try {
+    await reddit.subscribeToCurrentSubreddit();
+    return c.json<JoinResponse>({ type: 'join' });
   } catch (e) {
     return fail(c, e);
   }

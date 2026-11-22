@@ -47,5 +47,14 @@
   },
   "dev": {
     "subreddit": "here_lies_daily_dev"
+  },
+  "permissions": {
+    "redis": true,
+    "reddit": {
+      "asUser": [
+        "SUBMIT_COMMENT",
+        "SUBSCRIBE_TO_SUBREDDIT"
+      ]
+    }
   }
 }
