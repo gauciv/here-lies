@@ -44,8 +44,8 @@ const seed = async () => {
       const options = validDirections(board, stone).filter((d) => d !== truth);
       const arrow = rand() < 0.65 || !options.length ? truth : options[Math.floor(rand() * options.length)]!;
       if (fell.me.uncarved !== null) {
-        // like real players, about half skip carving unless it's their last candle
-        if (fell.me.uncarvedSkippable && rand() < 0.5) await engine.skip(day, ghost, fell.grave.i);
+        // like real players, about half skip carving
+        if (rand() < 0.5) await engine.skip(day, ghost, fell.grave.i);
         else await engine.carve(day, ghost, fell.grave.i, arrow);
       }
     }

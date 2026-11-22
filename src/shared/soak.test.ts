@@ -146,7 +146,6 @@ void test('every room plays end to end with many walkers and no broken invariant
             const s = await engine.skip(day, user, res.me.uncarved);
             checkState(day, board, s, user);
           } else {
-            if (!res.me.uncarvedSkippable) await expectReject(day, 'skipping the last candle', engine.skip(day, user, res.me.uncarved));
             const dirs = validDirections(board, stone);
             const c = await engine.carve(day, user, res.me.uncarved, dirs[Math.floor(rand() * dirs.length)]);
             checkState(day, board, c, user);

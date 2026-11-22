@@ -353,7 +353,6 @@ export class Engine {
       throw new GameError('Your candles are spent for today');
     }
     await this.recordPath(day, user, path);
-    const lastCandle = spent >= CANDLES_PER_DAY;
     const carving = await this.claimCarving(day, user, stone);
     const u = await this.store.hGetAll(K.user(day, user));
     const fellAt = parseList(u.fellAt);
@@ -366,7 +365,7 @@ export class Engine {
           ? {
               uncarved: String(stone),
               uncarvedStep: String(outcome.steps),
-              uncarvedSkippable: lastCandle ? '0' : '1',
+              uncarvedSkippable: '1', // carving is always a choice, even on your last candle
               uncarvedToken: String(spent),
               uncarvedQueued: carving === 'queue' ? '1' : '0',
             }
@@ -400,11 +399,10 @@ export class Engine {
     return { type: 'carve', grave, me };
   }
 
-  /** Leave no arrow on this fall (allowed until your last candle). */
+  /** Leave no arrow on this fall. Always allowed: nobody has to carve. */
   async skip(day: number, user: string, i: number): Promise<SkipResponse> {
     const u = await this.store.hGetAll(K.user(day, user));
     if (!u.uncarved || num(u.uncarved) !== i) throw new GameError('Nothing to carve here');
-    if (u.uncarvedSkippable !== '1') throw new GameError('Your last candle must leave an arrow');
     if (!(await this.store.hSetNX(K.user(day, user), `resolved:${u.uncarvedToken ?? ''}`, 'skip'))) throw new GameError('This fall is already settled');
     // release your claims so the stone (if you held it) and your one carving stay available
     if (u.uncarvedQueued !== '1') await this.store.hIncrBy(K.slabClaim(day), String(i), -1);

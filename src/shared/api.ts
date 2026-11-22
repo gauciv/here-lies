@@ -56,7 +56,7 @@ export type MeDto = {
   revealed: number[];
   /** a fall waiting for its arrow: the slab's stone index */
   uncarved: number | null;
-  /** the pending carving may be skipped (not your last candle) */
+  /** the pending carving may be skipped (always: carving is never forced) */
   uncarvedSkippable: boolean;
   /** the stone already bears an arrow: the pending carving will wait beneath it */
   uncarvedQueued: boolean;

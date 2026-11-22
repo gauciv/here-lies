@@ -266,7 +266,8 @@ export const useGame = () => {
     if (!api || !day || card.kind !== 'carve') return;
     try {
       const res = await api.skip(day.day, card.i);
-      respawn((p) => ({ ...p, me: res.me }));
+      if (res.me.candles > 0) respawn((p) => ({ ...p, me: res.me }));
+      else setS((p) => ({ ...p, me: res.me, phase: 'idle', card: { kind: 'gameOver' } }));
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Could not skip.');
     }

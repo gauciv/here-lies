@@ -197,14 +197,14 @@ export const CarveCard = ({ me, board, stone, fellToward, selected, onSelect, on
         <button className="btn btn-share" disabled={busy || selected === null} onClick={() => { if (selected === null) return; setBusy(true); onCarve(selected); }}>
           Carve
         </button>
-        {me.uncarvedSkippable && (
-          <button className="btn" disabled={busy} onClick={() => { setBusy(true); onSkip(); }}>Skip for now</button>
-        )}
+        <button className="btn" disabled={busy} onClick={() => { setBusy(true); onSkip(); }}>
+          {me.candles > 0 ? 'Skip for now' : 'Leave no mark'}
+        </button>
       </div>
       <p className="card-foot carve-rules">
-        {me.uncarvedSkippable
-          ? 'One arrow a day. Skip to save it for a later death; your last candle must carve.'
-          : 'This is your last candle, so you must leave your arrow.'}
+        {me.candles > 0
+          ? 'One arrow a day. Skip to save it for a later death, or never carve at all.'
+          : 'Your last candle is out. Carve your one arrow, or leave no mark.'}
       </p>
     </section>
   );

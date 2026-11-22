@@ -199,7 +199,7 @@ void test('arrows earn saved and fooled credit from later walkers', async () => 
   assert.equal(init.me.myArrow?.fooled, 1);
 });
 
-void test('carving can be skipped until the last candle, which must carve', async () => {
+void test('carving is always optional, even on the last candle', async () => {
   const e = new Engine(new MemoryStore());
   const stone = (f: { grave: { i: number } }) => f.grave.i;
   const f1 = await e.fall(DAY, 'sky', pitPath);
@@ -215,16 +215,17 @@ void test('carving can be skipped until the last candle, which must carve', asyn
   assert.equal(f2.me.uncarved, stone(f2));
   assert.equal(f2.me.uncarvedQueued, true);
   await e.skip(DAY, 'sky', stone(f2));
-  // sky's last candle must carve; the stone is taken, so the arrow waits beneath
+  // even sky's last candle may leave no mark: a whole day without carving is allowed
   const f3 = await e.fall(DAY, 'sky', pitPath);
   assert.equal(f3.me.uncarved, stone(f3));
-  assert.equal(f3.me.uncarvedSkippable, false);
+  assert.equal(f3.me.uncarvedSkippable, true);
   assert.equal(f3.me.uncarvedQueued, true);
-  await assert.rejects(e.skip(DAY, 'sky', stone(f3)), /last candle/);
-  await e.carve(DAY, 'sky', stone(f3), arrowFor(stone(f3)));
+  const s3 = await e.skip(DAY, 'sky', stone(f3));
+  assert.equal(s3.me.uncarved, null);
+  assert.equal(s3.me.candles, 0);
+  assert.equal(s3.me.myArrow, null, 'sky never carved today');
   const init = await e.init(DAY, 'other', 't3_x');
-  assert.equal(init.graves.find((g) => g.i === stone(f3))?.top?.user, 'other', "the shown arrow stays until it crumbles");
-  assert.equal(init.me.myArrow?.crumbled, false);
+  assert.equal(init.graves.find((g) => g.i === stone(f3))?.top?.user, 'other');
 });
 
 void test('a slab crumbles after five walkers stand on it', async () => {
