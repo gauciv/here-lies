@@ -108,35 +108,54 @@ void test('sharing: only after the run, once, and a failed post can be retried',
   const e = new Engine(new MemoryStore());
   await assert.rejects(e.claimShare(DAY, 'sam'), /Finish/);
   await e.cross(DAY, 'sam', crossPath);
-  const text = await e.claimShare(DAY, 'sam');
-  assert.match(text, / crossed the dark /);
-  assert.ok(/^[\x20-\x7E\n·]*$/.test(text), 'share text uses only characters every font has');
+  const share = await e.claimShare(DAY, 'sam', '   my own   caption  ');
+  assert.equal(share.title, 'my own caption');
+  assert.equal(share.card.kind, 'result');
+  assert.equal(share.card.crossed, true);
+  assert.equal(share.card.user, 'sam');
   await assert.rejects(e.claimShare(DAY, 'sam'), /already/);
   await e.confirmShare(DAY, 'sam', false);
-  await e.claimShare(DAY, 'sam');
+  const again = await e.claimShare(DAY, 'sam', '');
+  assert.match(again.title, /^I crossed .+ in \d+:\d\d as a Pioneer\. Here Lies, day \d+\.$/, 'an empty caption falls back to the default');
   const me = await e.confirmShare(DAY, 'sam', true);
   assert.equal(me.shared, true);
   await assert.rejects(e.claimShare(DAY, 'sam'), /already/);
 });
 
-void test('pioneer score rewards crossing before others map the pits', async () => {
+void test('crossings are timed from the first step in, and ranked by speed among today\'s crossers', async () => {
   const e = new Engine(new MemoryStore());
-  await e.init(DAY, 'early', 't3_x'); // seeds forgotten graves, which never count
-  await assert.rejects(e.flairFor(DAY, 'early'), /Cross/);
-  const first = await e.cross(DAY, 'early', crossPath);
-  assert.equal(first.me.pioneer, 100);
-  const flair = await e.flairFor(DAY, 'early');
-  assert.match(flair.text, /^Trailblazer · /);
-  assert.ok(!flair.text.includes(','));
-  // someone else falls into an unmarked pit: later crossers score lower
-  await e.fall(DAY, 'faller', pitPath);
-  const late = await e.cross(DAY, 'late', crossPath);
-  assert.ok(late.me.pioneer !== null && late.me.pioneer < 100);
-  // your own falls never count against you
-  const soloFall = await e.fall(DAY, 'solo', pitPath);
-  if (soloFall.me.uncarved !== null) await e.skip(DAY, 'solo', soloFall.me.uncarved);
-  const solo = await e.cross(DAY, 'solo', crossPath);
-  assert.equal(solo.me.pioneer, late.me.pioneer);
+  const realNow = Date.now;
+  let clock = 1_000_000;
+  Date.now = () => clock;
+  try {
+    await e.start(DAY, 'slow');
+    await e.start(DAY, 'quick');
+    await e.start(DAY, 'mid');
+    await e.start(DAY, 'quick'); // starting again never resets your clock
+    await assert.rejects(e.flairFor(DAY, 'quick'), /Cross/);
+    clock += 30_000;
+    const q = await e.cross(DAY, 'quick', crossPath);
+    assert.equal(q.me.time, 30_000);
+    assert.deepEqual(q.me.standing, { position: 1, total: 1, percent: 100, title: 'Pioneer' }, 'the first across is a Pioneer');
+    clock += 60_000;
+    const m = await e.cross(DAY, 'mid', crossPath);
+    assert.equal(m.me.time, 90_000);
+    clock += 60_000;
+    const sl = await e.cross(DAY, 'slow', crossPath);
+    assert.equal(sl.me.time, 150_000);
+    assert.equal(sl.me.standing?.position, 3);
+    assert.equal(sl.me.standing?.title, 'Grave-walker');
+    // standings are live: re-read later, everyone sees where they stand now
+    const quick = await e.init(DAY, 'quick', 't3_x');
+    assert.deepEqual(quick.me.standing, { position: 1, total: 3, percent: 34, title: 'Pioneer' });
+    const mid = await e.init(DAY, 'mid', 't3_x');
+    assert.equal(mid.me.standing?.title, 'Wayfarer');
+    const flair = await e.flairFor(DAY, 'quick');
+    assert.match(flair.text, /^Pioneer · Here Lies day /);
+    assert.ok(!flair.text.includes(','));
+  } finally {
+    Date.now = realNow;
+  }
 });
 
 void test('logged-out placeholders can never act, and real names are never mistaken for them', async () => {

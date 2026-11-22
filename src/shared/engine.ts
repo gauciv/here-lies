@@ -8,9 +8,9 @@
 // truth) and who it fooled (fell from its stone when it lied).
 import { CANDLES_PER_DAY, ROWS, cellOf, dayNumber, difficultyOf, generateBoard, idx, judgeRun, mulberry32, neighbors, type Cell } from './board';
 import { CRUMBLE_AFTER, FORGOTTEN, MAX_ARROWS, arrowIsTrue, directionBetween, isAnonymous, isDirection, validDirections } from './epitaphs';
-import { canShare, shareText } from './share';
-import { pioneerFlair, pioneerScore, type Flair } from './pioneer';
-import type { CarveResponse, CrossResponse, DayDto, EpitaphDto, FallResponse, GraveDto, InitResponse, MeDto, MyArrowDto, SkipResponse } from './api';
+import { canShare, cleanCaption, defaultCaption, resultPost, type ResultPost } from './share';
+import { standingFlair, standingOf, type Flair, type Standing } from './pioneer';
+import type { StartResponse, CarveResponse, CrossResponse, DayDto, EpitaphDto, FallResponse, GraveDto, InitResponse, MeDto, MyArrowDto, SkipResponse } from './api';
 
 export type Store = {
   get(key: string): Promise<string | undefined>;
@@ -35,7 +35,7 @@ const NS = 'v6:';
 
 const K = {
   stats: (d: number) => `${NS}d:${d}:stats`,
-  /** deaths per pit (server-only; drives the pioneer score) */
+  /** deaths per pit (server-only) */
   falls: (d: number) => `${NS}d:${d}:falls`,
   /** deaths per slab stone */
   slabFalls: (d: number) => `${NS}d:${d}:slabfalls`,
@@ -50,6 +50,8 @@ const K = {
   user: (d: number, u: string) => `${NS}d:${d}:u:${u}`,
   streak: (u: string) => `u:${u}:streak`,
   seededCells: (d: number) => `${NS}d:${d}:seeded`,
+  /** today's crossers by time: score = -ms, so the fastest is on top */
+  times: (d: number) => `${NS}d:${d}:times`,
 };
 
 const num = (v: string | undefined, fallback = 0): number => {
@@ -123,7 +125,10 @@ export class Engine {
       streak: last >= day - 1 ? num(st.count) : 0,
       bestStreak: Math.max(num(st.best), last >= day - 1 ? num(st.count) : 0),
       shared: u.shared === '1',
-      pioneer: u.pioneer ? num(u.pioneer) : null,
+      startedAt: u.startedAt ? num(u.startedAt) : null,
+      endedAt: u.endedAt ? num(u.endedAt) : null,
+      time: u.time ? num(u.time) : null,
+      standing: u.time ? await this.standing(day, user) : null,
       myArrow: await this.myArrow(day, u.myEp),
     };
   }
@@ -352,6 +357,8 @@ export class Engine {
       await this.store.hIncrBy(K.user(day, user), 'spent', -1);
       throw new GameError('Your candles are spent for today');
     }
+    // the last candle stops the clock
+    if (spent === CANDLES_PER_DAY) await this.store.hSetNX(K.user(day, user), 'endedAt', String(Date.now()));
     await this.recordPath(day, user, path);
     const carving = await this.claimCarving(day, user, stone);
     const u = await this.store.hGetAll(K.user(day, user));
@@ -411,22 +418,20 @@ export class Engine {
     return { type: 'skip', me: await this.me(day, user) };
   }
 
-  /** Share of open pits that other real players had not yet marked, right now. */
-  private async pioneerFor(day: number, user: string): Promise<number> {
-    const [falls, seeded, u] = await Promise.all([
-      this.store.hGetAll(K.falls(day)),
-      this.store.hGetAll(K.seededCells(day)),
-      this.store.hGetAll(K.user(day, user)),
-    ]);
-    const mine = parseList(u.fellAt);
-    let marked = 0;
-    for (const [cell, count] of Object.entries(falls)) {
-      const i = Number(cell);
-      const others = num(count) - (seeded[cell] ? 1 : 0) - mine.filter((m) => m === i).length;
-      if (others > 0) marked++;
-    }
-    const pits = generateBoard(day).pits.filter(Boolean).length;
-    return pioneerScore(pits, Object.keys(seeded).length, marked);
+  /** Where this player's crossing time stands among everyone who crossed today, right now. */
+  private async standing(day: number, user: string): Promise<Standing | null> {
+    const total = await this.store.zCard(K.times(day));
+    if (!total) return null;
+    const ranked = await this.store.zTop(K.times(day), total);
+    const at = ranked.indexOf(user);
+    return at < 0 ? null : standingOf(at + 1, ranked.length);
+  }
+
+  /** The clock starts the first time you step into the day's room, and never resets. */
+  async start(day: number, user: string): Promise<StartResponse> {
+    if (isAnonymous(user)) throw new GameError('Log in to walk the crossing');
+    await this.store.hSetNX(K.user(day, user), 'startedAt', String(Date.now()));
+    return { type: 'start', me: await this.me(day, user) };
   }
 
   async cross(day: number, user: string, rawPath: unknown): Promise<CrossResponse> {
@@ -436,8 +441,13 @@ export class Engine {
     if (outcome.kind !== 'crossed') throw new GameError('That walk did not reach the far wall');
     if (!(await this.store.hSetNX(K.user(day, user), 'crossLock', '1'))) throw new GameError('You already crossed today');
     const rank = await this.store.hIncrBy(K.stats(day), 'crossed', 1);
-    const pioneer = await this.pioneerFor(day, user);
-    await this.store.hSet(K.user(day, user), { crossed: '1', rank: String(rank), steps: String(outcome.steps), pioneer: String(pioneer) });
+    // time since you first stepped in (an older client that never started the clock counts from now)
+    const now = Date.now();
+    await this.store.hSetNX(K.user(day, user), 'startedAt', String(now));
+    const startedAt = num(await this.store.hGet(K.user(day, user), 'startedAt'), now);
+    const time = Math.max(0, now - startedAt);
+    await this.store.hSet(K.user(day, user), { crossed: '1', rank: String(rank), steps: String(outcome.steps), time: String(time), endedAt: String(now) });
+    await this.store.zAdd(K.times(day), user, -time);
     await this.recordPath(day, user, path);
     // streaks only advance on today's crossing, never by replaying an old post
     if (day === dayNumber()) {
@@ -454,12 +464,12 @@ export class Engine {
   async flairFor(day: number, user: string): Promise<Flair> {
     if (isAnonymous(user)) throw new GameError('Log in to wear a title');
     const me = await this.me(day, user);
-    if (!me.crossed || me.pioneer === null) throw new GameError('Cross the dark to earn a title');
-    return pioneerFlair(day, me.pioneer);
+    if (!me.crossed || !me.standing) throw new GameError('Cross the dark to earn a title');
+    return standingFlair(day, me.standing.title);
   }
 
-  /** Claim today's single share; returns the comment text to post. */
-  async claimShare(day: number, user: string): Promise<string> {
+  /** Claim today's single share; returns the post's title (the player's caption) and its card. */
+  async claimShare(day: number, user: string, caption?: unknown): Promise<{ title: string; card: ResultPost }> {
     if (isAnonymous(user)) throw new GameError('Log in to share');
     const me = await this.me(day, user);
     if (!canShare(me)) throw new GameError('Finish your crossing first');
@@ -468,7 +478,7 @@ export class Engine {
       await this.store.hIncrBy(K.user(day, user), 'shareClaim', -1);
       throw new GameError('You already shared today');
     }
-    return shareText(day, me);
+    return { title: cleanCaption(caption, defaultCaption(day, me)), card: resultPost(day, me) };
   }
 
   /** Record the outcome; a failed post releases the claim so the player can retry. */

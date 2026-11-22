@@ -6,7 +6,7 @@ import { COLS, CANDLES_PER_DAY, cellOf, difficultyOf, generateBoard, idx, isOpen
 import { MAX_ARROWS, arrowIsTrue, validDirections, isForgotten, DIRECTIONS } from './epitaphs.ts';
 import { Engine } from './engine.ts';
 import { MemoryStore } from './memoryStore.ts';
-import { shareText } from './share.ts';
+import { defaultCaption } from './share.ts';
 import type { GraveDto, InitResponse, MeDto } from './api.ts';
 
 type Cell = { c: number; r: number };
@@ -48,7 +48,7 @@ const checkState = (day: number, board: Board, res: { me?: MeDto }, user: string
   if (me) {
     if (me.candles < 0 || me.candles > CANDLES_PER_DAY) fail(day, `${user} candles ${me.candles}`);
     for (const i of me.revealed) if (board.walls[i] || board.pits[i]) fail(day, `${user} revealed rock/pit ${i}`);
-    if (me.pioneer !== null && (me.pioneer < 0 || me.pioneer > 100)) fail(day, `pioneer ${me.pioneer}`);
+    if (me.standing && (me.standing.percent < 1 || me.standing.percent > 100 || me.standing.position > me.standing.total)) fail(day, `standing ${JSON.stringify(me.standing)}`);
     if (me.uncarved !== null && (board.walls[me.uncarved] || board.pits[me.uncarved])) fail(day, `uncarved on rock/pit`);
   }
 };
@@ -107,9 +107,10 @@ void test('every room plays end to end with many walkers and no broken invariant
     checkState(day, board, pc, 'perfect');
     if (!pc.me.crossed || pc.me.rank !== 1) fail(day, 'perfect player did not cross first');
     await expectReject(day, 'a second crossing', engine.cross(day, 'perfect', perfect));
-    const txt = shareText(day, pc.me);
-    if (!txt.includes(board.name)) fail(day, 'share text lacks room name');
-    if (/[^\x20-\x7e\n·]/.test(txt)) fail(day, `share text has unsafe chars: ${JSON.stringify(txt)}`);
+    const txt = defaultCaption(day, pc.me);
+    if (!txt.includes(board.name)) fail(day, 'caption lacks room name');
+    if (/[^\x20-\x7e·]/.test(txt) || txt.length > 300) fail(day, `caption is not a safe post title: ${JSON.stringify(txt)}`);
+    if (pc.me.time === null || !pc.me.standing) fail(day, 'a crossing has no time or standing');
 
     // wanderers: walk toward pits or the door, carve/skip, use all candles
     for (let p = 0; p < 14; p++) {

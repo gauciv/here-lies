@@ -1,5 +1,6 @@
 import type { Cell } from './board';
 import type { Direction } from './epitaphs';
+import type { Standing } from './pioneer';
 
 /** The single arrow carved on a slab. */
 export type EpitaphDto = {
@@ -67,8 +68,14 @@ export type MeDto = {
   bestStreak: number;
   /** already posted today's result as a comment */
   shared: boolean;
-  /** % of pits still unmapped by others when you crossed (null until crossed) */
-  pioneer: number | null;
+  /** when you first stepped into today's room (server clock, ms) */
+  startedAt: number | null;
+  /** when the run ended: crossed, or the last candle went out */
+  endedAt: number | null;
+  /** your crossing time in ms (null until crossed) */
+  time: number | null;
+  /** where that time stands among today's crossers, live */
+  standing: Standing | null;
   myArrow: MyArrowDto | null;
 };
 
@@ -89,7 +96,8 @@ export type CarveRequest = { day: number; i: number; arrow: Direction };
 export type CarveResponse = { type: 'carve'; grave: GraveDto; me: MeDto };
 
 export type SkipResponse = { type: 'skip'; me: MeDto };
-export type ShareResponse = { type: 'share'; me: MeDto };
+export type StartResponse = { type: 'start'; me: MeDto };
+export type ShareResponse = { type: 'share'; me: MeDto; url: string | null };
 export type JoinResponse = { type: 'join' };
 export type FlairResponse = { type: 'flair'; text: string };
 

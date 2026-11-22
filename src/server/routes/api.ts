@@ -94,16 +94,35 @@ api.post('/share', async (c) => {
     const body = await readBody(c);
     const day = dayFrom(body);
     const user = await requireUser();
-    const { postId } = context;
-    if (!postId) throw new GameError('Open the game from its post');
-    const text = await engine.claimShare(day, user);
+    const { subredditName } = context;
+    if (!subredditName) throw new GameError('Open the game from its post');
+    // the player's caption becomes the post's title; the post itself renders the result card
+    const { title, card } = await engine.claimShare(day, user, body.caption);
+    let url: string;
     try {
-      await reddit.submitComment({ id: postId, text, runAs: 'USER' });
+      const post = await reddit.submitCustomPost({
+        subredditName,
+        title,
+        postData: card,
+        runAs: 'USER',
+        userGeneratedContent: { text: title },
+        textFallback: { text: `${title} (a Here Lies result card)` },
+      });
+      url = post.url;
     } catch (e) {
       await engine.confirmShare(day, user, false);
       throw e;
     }
-    return c.json<ShareResponse>({ type: 'share', me: await engine.confirmShare(day, user, true) });
+    return c.json<ShareResponse>({ type: 'share', me: await engine.confirmShare(day, user, true), url });
+  } catch (e) {
+    return fail(c, e);
+  }
+});
+
+api.post('/start', async (c) => {
+  try {
+    const body = await readBody(c);
+    return c.json(await engine.start(dayFrom(body), await requireUser()));
   } catch (e) {
     return fail(c, e);
   }
