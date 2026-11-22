@@ -23,6 +23,14 @@
   --ghost2: #5f95b3;
   --ghost3: #a8d4e6;
   --moss3: #4a6b3d;
+  /* tileset palette (0x72 DungeonTileset II) for UI chrome */
+  --ink: #222222;
+  --tab-face: #1f1918;
+  --tab-stone-m: #775c55;
+  --tab-stone-l: #aa8d7a;
+  --tab-stone-h: #d3bfa9;
+  --tab-torch-hi: #ffd27a;
+  --tab-blood: #da4e38;
   --font: 'Pixelify Sans', 'Courier New', monospace;
   /* pixel-notched frame: 2px border with clipped corners */
   --frame: 0 -2px 0 0 var(--stone6), 0 2px 0 0 var(--stone6), -2px 0 0 0 var(--stone6), 2px 0 0 0 var(--stone6);
@@ -112,99 +120,134 @@ body {
   color: var(--stone8);
 }
 
-/* ── cards ───────────────────────────────────────── */
+/* ── cards: stone tablets in the tileset's own palette ── */
 .card-layer {
   position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 8px;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
   display: flex;
   justify-content: center;
   pointer-events: none;
 }
-.card-layer-top { top: 8px; bottom: auto; }
+.card-layer-top { top: 6px; bottom: auto; }
 .card {
   pointer-events: auto;
   position: relative;
   width: 100%;
-  max-width: 380px;
-  max-height: 70vh;
+  max-width: 384px;
+  max-height: 72vh;
   overflow-y: auto;
-  padding: 14px 16px 14px;
-  background: rgba(12, 15, 22, 0.96);
-  box-shadow: var(--frame), 0 10px 30px rgba(0, 0, 0, 0.6);
+  border: 12px solid transparent;
+  border-image: url('./assets/ui/panel.png') 12 stretch;
+  background: url('./assets/ui/bricks.png') repeat, var(--tab-face);
+  background-origin: padding-box;
+  background-clip: padding-box;
+  padding: 8px 12px 10px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  filter: drop-shadow(0 8px 0 rgba(0, 0, 0, 0.55));
   animation: rise 0.18s steps(4) both;
+  scrollbar-width: none; /* the stone frame is the visual edge; content still scrolls */
 }
-@keyframes rise { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes rise { from { transform: translateY(9px); opacity: 0; } to { transform: none; opacity: 1; } }
+.card-kicker { margin: 0; padding-right: 40px; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: var(--tab-stone-l); }
+.epitaph {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--tab-stone-h);
+  text-wrap: balance;
+  text-shadow: 0 -2px 0 #0d0a0a, 0 2px 0 #3d3230; /* carved into the stone */
+  padding-right: 34px;
+}
+.epitaph-silent { color: var(--tab-stone-l); font-weight: 400; }
+.card-meta { margin: 0; font-size: 14px; color: var(--tab-stone-l); line-height: 1.4; }
+.card-foot { margin: 2px 0 0; font-size: 13px; color: var(--tab-stone-l); opacity: 0.85; }
+.verdict { font-weight: 600; }
+.verdict-trusted { color: var(--tab-torch-hi); }
+.verdict-liar { color: var(--tab-blood); }
+.verdict-disputed { color: var(--tab-stone-h); }
+.verdict-unjudged { color: var(--tab-stone-l); }
+
+/* plate buttons: pre-scaled pixel art, pressed by shifting down */
+.btn {
+  font: 600 15px/1.1 var(--font);
+  color: var(--ink);
+  border: 9px solid transparent;
+  border-image: url('./assets/ui/button.png') 9 fill stretch;
+  background: none;
+  padding: 1px 6px 3px;
+  margin: 0;
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { filter: brightness(1.08); }
+.btn:active:not(:disabled) { transform: translateY(3px); }
+.btn:disabled { cursor: default; border-image-source: url('./assets/ui/button-dark.png'); color: var(--tab-stone-l); }
+.btn:focus-visible, .card-close:focus-visible, .mute:focus-visible { outline: 3px solid var(--tab-torch-hi); outline-offset: 2px; }
+.btn .count { margin-left: 6px; opacity: 0.7; }
+.vote-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-honest.is-picked { border-image-source: url('./assets/ui/button-hot.png'); color: #2a1306; }
+.btn-liar.is-picked { border-image-source: url('./assets/ui/button-red.png'); color: #fff3e3; }
+.btn-share, .btn-cta { border-image-source: url('./assets/ui/button-hot.png'); color: #2a1306; }
+
 .card-close {
   position: absolute;
   top: 6px;
-  right: 8px;
+  right: 6px;
+  width: 36px;
+  height: 36px;
+  border: 9px solid transparent;
+  border-image: url('./assets/ui/button-dark.png') 9 fill stretch;
   background: none;
-  border: 0;
-  color: var(--stone8);
-  font: 600 22px/1 var(--font);
+  color: var(--tab-stone-h);
+  font: 600 18px/1 var(--font);
+  padding: 0;
   cursor: pointer;
-  padding: 2px 6px;
 }
-.card-close:hover { color: var(--bone3); }
-.card-kicker { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: var(--ghost3); }
-.epitaph { margin: 0; font-size: 24px; font-weight: 600; line-height: 1.15; color: var(--bone3); text-wrap: balance; }
-.epitaph-silent { color: var(--stone8); font-weight: 400; }
-.card-meta { margin: 0; font-size: 14px; color: var(--stone8); line-height: 1.35; }
-.card-foot { margin: 2px 0 0; font-size: 13px; color: var(--stone8); }
-.verdict { font-weight: 600; }
-.verdict-trusted { color: var(--warm5); }
-.verdict-liar { color: var(--red2); }
-.verdict-disputed { color: var(--ghost3); }
-.verdict-unjudged { color: var(--stone7); }
-
-.btn {
-  font: 400 15px/1 var(--font);
-  color: var(--bone2);
-  background: var(--void2);
-  border: 0;
-  box-shadow: var(--frame);
-  padding: 9px 12px;
-  margin: 2px;
-  cursor: pointer;
-  transition: none;
-}
-.btn:hover:not(:disabled) { background: var(--stone4); color: var(--bone3); }
-.btn:active:not(:disabled) { transform: translateY(1px); }
-.btn:disabled { cursor: default; opacity: 0.55; }
-.btn:focus-visible, .card-close:focus-visible { outline: 2px solid var(--warm5); outline-offset: 3px; }
-.btn .count { color: var(--stone8); margin-left: 4px; }
-.vote-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.btn-honest.is-picked { box-shadow: 0 -2px 0 0 var(--warm4), 0 2px 0 0 var(--warm4), -2px 0 0 0 var(--warm4), 2px 0 0 0 var(--warm4); color: var(--warm5); opacity: 1; }
-.btn-liar.is-picked { box-shadow: 0 -2px 0 0 var(--red2), 0 2px 0 0 var(--red2), -2px 0 0 0 var(--red2), 2px 0 0 0 var(--red2); color: var(--red2); opacity: 1; }
+.card-close:hover { color: #fff; }
+.card-close:active { transform: translateY(3px); }
 
 .carve-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.btn-carve { text-align: left; padding: 10px; }
-.btn-carve:hover:not(:disabled) { color: var(--warm5); }
+.btn-carve { text-align: left; border-image-source: url('./assets/ui/button-dark.png'); color: var(--tab-stone-h); font-weight: 400; padding: 3px 6px 5px; }
+.btn-carve:hover:not(:disabled) { border-image-source: url('./assets/ui/button.png'); color: var(--ink); filter: none; }
 
-.more summary { cursor: pointer; font-size: 13px; color: var(--ghost3); list-style: none; }
-.more summary::before { content: '+ '; }
+.more summary { cursor: pointer; font-size: 13px; color: var(--tab-stone-l); list-style: none; }
+.more summary::before { content: '+ '; color: var(--tab-torch-hi); }
 .more[open] summary::before { content: '− '; }
 .more ul { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
-.more li { display: flex; flex-direction: column; gap: 3px; }
-.more-text { color: var(--bone2); font-size: 16px; }
-.more-who { color: var(--stone7); font-size: 12px; }
+.more li { display: flex; flex-direction: column; gap: 4px; }
+.more-text { color: var(--tab-stone-h); font-size: 16px; }
+.more-who { color: var(--tab-stone-l); font-size: 12px; }
 
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 4px 0; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 2px 0; }
 .stats div { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
-.stats dt { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--stone7); }
-.stats dd { margin: 0; font-size: 22px; font-weight: 600; color: var(--warm5); font-variant-numeric: tabular-nums; }
+.stats dt { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--tab-stone-l); }
+.stats dd { margin: 0; font-size: 24px; font-weight: 600; color: var(--tab-torch-hi); font-variant-numeric: tabular-nums; text-shadow: 0 2px 0 #0d0a0a; }
 
-.share { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; padding-top: 10px; border-top: 2px dashed var(--stone4); }
-.share-label { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--stone7); }
-.share-preview { margin: 0; padding: 8px 10px; background: var(--void2); color: var(--bone2); font-size: 13px; line-height: 1.4; white-space: pre-line; }
-.share-done { margin: 0; color: var(--warm5); font-size: 14px; }
-.btn-share { color: #1a0f08; background: var(--warm5); }
-.btn-share:hover:not(:disabled) { background: var(--bone3); color: #1a0f08; }
+/* a stone ledge divides the tablet */
+.share {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 2px;
+  padding-top: 14px;
+  background: linear-gradient(#0d0a0a 0 3px, #3d3230 3px 6px) top / 100% 6px no-repeat;
+}
+.share-label { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--tab-stone-l); }
+.share-preview {
+  margin: 0;
+  padding: 10px 12px;
+  background: #140f0e;
+  box-shadow: inset 0 0 0 3px #0d0a0a, inset 0 6px 0 0 #0d0a0a;
+  color: var(--tab-stone-h);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+.share-done { margin: 0; color: var(--tab-torch-hi); font-size: 14px; }
 
 .toast {
   position: absolute;
@@ -214,11 +257,11 @@ body {
   width: max-content;
   max-width: calc(100% - 16px);
   text-align: center;
-  background: var(--void1);
-  box-shadow: var(--frame);
-  padding: 8px 12px;
+  border: 9px solid transparent;
+  border-image: url('./assets/ui/button-dark.png') 9 fill stretch;
+  padding: 0 6px 2px;
   font-size: 14px;
-  color: var(--bone3);
+  color: var(--tab-stone-h);
   pointer-events: none;
   animation: rise 0.15s steps(3) both;
 }
@@ -248,11 +291,6 @@ body {
 .splash-hook { margin: 8px 0 0; font-size: 17px; line-height: 1.35; color: var(--bone2); text-shadow: 0 2px 0 #000; }
 .btn-cta {
   pointer-events: auto;
-  font-size: 18px;
-  font-weight: 600;
-  padding: 12px 20px;
-  color: #1a0f08;
-  background: var(--warm5);
-  box-shadow: 0 -2px 0 0 var(--warm3), 0 2px 0 0 var(--warm3), -2px 0 0 0 var(--warm3), 2px 0 0 0 var(--warm3), 0 6px 0 0 rgba(0, 0, 0, 0.6);
+  font-size: 19px;
+  padding: 3px 14px 5px;
 }
-.btn-cta:hover:not(:disabled) { background: var(--bone3); color: #1a0f08; }
