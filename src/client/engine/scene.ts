@@ -251,8 +251,9 @@ export class Scene {
         this.frameOf(x, FLOORS[variant] ?? 'floor_1', c * TILE, TOP + r * TILE);
       }
     this.drawRock(x, s.board);
-    // entrance stairs below the start stone
-    this.frameOf(x, 'floor_stairs', 3 * TILE, TOP + ROWS * TILE);
+    // the doorway you came in through, below the start stone: the far door's
+    // open leaf seen from inside the room (upside down), dark beyond
+    this.drawEntrance(x);
     // pits stay hidden, even ones you fell into; they only appear when the dark lifts
     // while you're a ghost, the pit you died in gapes beneath you
     if (s.ghost && !s.revealAll) this.frameOf(x, 'hole', s.player.c * TILE, TOP + s.player.r * TILE);
@@ -287,6 +288,21 @@ export class Scene {
         // the stone lip along the top, unless the rock carries on upward (row 0 meets the wall)
         if (r > 0 && !rock(c, r - 1) && this.atlas) x.drawImage(this.atlas, lip[0], lip[1] + 11, TILE, 5, X, Y, TILE, 5);
       }
+  }
+
+  private drawEntrance(x: CanvasRenderingContext2D): void {
+    if (!this.atlas) return;
+    const [sx, sy, w, h] = FRAMES.doors_leaf_open;
+    const dx = START_CELL.c * TILE - 8, dy = TOP + ROWS * TILE;
+    x.save();
+    x.beginPath();
+    x.rect(0, dy, SCENE_W, SCENE_H - dy);
+    x.clip();
+    x.translate(dx, dy + h);
+    x.scale(1, -1);
+    this.px(x, 'void0', 3, 2, 26, 27);
+    x.drawImage(this.atlas, sx, sy, w, h, 0, 0, w, h);
+    x.restore();
   }
 
   private drawWall(x: CanvasRenderingContext2D, board: Board, doorOpen: boolean): void {
