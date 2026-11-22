@@ -44,6 +44,10 @@ export type SceneState = {
   fading: boolean;
   /** game over: the soul rises from its pit and drifts to the entrance, ignoring the stones */
   soulLeaving: boolean;
+  /** crossed: the dwarf cheers before the door, still in the dark */
+  celebrating: boolean;
+  /** 'Continue' after crossing: the dwarf walks out through the door */
+  exiting: boolean;
 };
 
 /** How far the torch reaches, in tiles (centre to centre). Drawing and tapping share it. */
@@ -59,17 +63,20 @@ export type SceneEvents = {
   onCrossDone?: () => void;
   /** the departing soul has reached the stairs */
   onSoulGone?: () => void;
+  /** the dwarf has walked out through the far door */
+  onExitDone?: () => void;
 };
 
 type Mote = { x: number; y: number; vx: number; vy: number; life: number; seed: number };
 type Shatter = { x: number; y: number; t0: number };
 const REVIVE_MS = 1500;
 const LEAVE_MS = 2000;
+const EXIT_MS = 1500;
 const SHATTER_MS = 1100;
 
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
 const FALL_MS = 900;
-const CROSS_MS = 2400;
+const CROSS_MS = 1200;
 const HOP_MS = 180;
 const IDLE_FRAME_MS = 140;
 /** hero sprite is 16×28; feet sit on sprite row 27 */
@@ -77,6 +84,8 @@ const HERO_W = 16;
 const HERO_H = 28;
 /** where the hero's front hand is on the (right-facing) sprite */
 const HAND = { x: 14, y: 17 };
+/** the raised hand while cheering (right-facing sprite) */
+const CHEER_HAND = { x: 17, y: -1 };
 /** the door leaf (32 px) is centred on the door's column */
 const doorX = (board: Board): number => board.door.c * TILE - 8;
 
@@ -124,6 +133,7 @@ export class Scene {
   private raf = 0;
   private torchGlow = 1;
   private leaveT0 = -1;
+  private exitT0 = -1;
   private dawn = 0;
 
   constructor(canvas: HTMLCanvasElement, events: SceneEvents = {}) {
@@ -175,6 +185,8 @@ export class Scene {
       }
     }
     if (next.soulLeaving && !prev?.soulLeaving) this.leaveT0 = now;
+    if (next.exiting && !prev?.exiting) this.exitT0 = now;
+    if (!next.exiting) this.exitT0 = -1;
     if (!next.soulLeaving) this.leaveT0 = -1;
     if (next.phase !== this.lastPhase) {
       this.phaseT0 = now;
@@ -355,6 +367,27 @@ export class Scene {
     }
   }
 
+  /**
+   * Arms up and a happy squint, pixelled over the dwarf's own frame. Coordinates
+   * are on the right-facing 16x28 sprite and mirror when he faces left.
+   */
+  private drawCheer(ctx: CanvasRenderingContext2D, hx: number, hy: number, flip: boolean): void {
+    const X = (x: number) => hx + (flip ? HERO_W - 1 - x : x);
+    const dot = (col: ColorKey, x: number, y: number) => this.px(ctx, col, X(x), hy + y);
+    // both arms raised high from the shoulders, out past the hair, hands open above the head
+    const arms: [number, number][][] = [
+      [[3, 20], [2, 19], [1, 18], [1, 17], [0, 16], [0, 15], [-1, 14], [-1, 13], [-1, 12], [-2, 11], [-2, 10]],
+      [[12, 20], [13, 19], [14, 18], [14, 17], [15, 16], [15, 15], [16, 14], [16, 13], [16, 12], [17, 11], [17, 10]],
+    ];
+    for (const arm of arms) for (const [x, y] of arm) { dot('ink', x - 1, y); dot('ink', x + 1, y); }
+    for (const arm of arms) for (const [x, y] of arm) dot('red1', x, y); // sleeves a shade darker than his hair
+    for (const [x, y] of [[-3, 9], [-2, 9], [-1, 9], [-2, 8], [16, 9], [17, 9], [18, 9], [17, 8]] as const) dot('ink', x, y - 1);
+    for (const [x, y] of [[-2, 9], [-2, 8], [-3, 8], [17, 9], [17, 8], [18, 8]] as const) dot('bone3', x, y);
+    // a happy squint: the eyes close into little arches
+    for (const [x, y] of [[8, 19], [9, 19], [11, 19], [12, 19]] as const) dot('bone1', x, y);
+    for (const [x, y] of [[8, 18], [9, 18]] as const) dot('ink', x, y);
+  }
+
   /** The dwarf's spirit hovering over the pit where it died (drawn after lighting, so it glows). */
   private drawGhost(ctx: CanvasRenderingContext2D, hx: number, hy: number, flip: boolean, t: number, alpha = 1): void {
     const frames = getSprites().ghost;
@@ -429,10 +462,15 @@ export class Scene {
 
     this.ensureLayer(s, crossP > 0.08);
 
-    // walking through the door while crossing
-    const walkK = Math.min(1, crossP / 0.5);
-    let walkY = crossP > 0 ? s.player.r - walkK * 1.5 : this.pos.y;
-    let walkX = crossP > 0 ? this.pos.x + (s.board.door.c - this.pos.x) * walkK : this.pos.x;
+    // the door opens as you reach it; you only walk through it on 'Continue'
+    let exitP = 0;
+    if (this.exitT0 >= 0) {
+      exitP = Math.min(1, (now - this.exitT0) / EXIT_MS);
+      if (exitP >= 1) { this.exitT0 = -2; this.events.onExitDone?.(); }
+    } else if (this.exitT0 === -2) exitP = 1;
+    const walkK = Math.min(1, exitP / 0.6);
+    let walkY = exitP > 0 ? s.player.r - walkK * 1.5 : this.pos.y;
+    let walkX = exitP > 0 ? this.pos.x + (s.board.door.c - this.pos.x) * walkK : this.pos.x;
     // the soul's way home: straight to the stairs it came up, over pits and rock alike
     let soulAlpha = 1;
     if (s.ghost && this.leaveT0 !== -1) {
@@ -483,12 +521,15 @@ export class Scene {
     // hero
     const hx = Math.round(walkX * TILE + (TILE - HERO_W) / 2);
     let hy = Math.round(TOP + walkY * TILE + 14 - (HERO_H - 1) - hop);
-    const showHero = !s.ghost && s.phase !== 'fallen' && s.phase !== 'idle' && crossP <= 0.6;
-    const running = hopP >= 0 || (crossP > 0 && crossP < 0.6);
+    const showHero = !s.ghost && s.phase !== 'fallen' && s.phase !== 'idle' && exitP <= 0.6;
+    const running = hopP >= 0 || (exitP > 0 && exitP < 0.6);
     const frameNo = running
-      ? Math.floor(((hopP >= 0 ? hopP : crossP * 6) * 4) % 4)
+      ? Math.floor(((hopP >= 0 ? hopP : exitP * 6) * 4) % 4)
       : this.reduced ? 0 : Math.floor(now / IDLE_FRAME_MS) % 4;
     const flip = this.facing < 0;
+    // cheering at the door: hopping with both arms up, the torch held high
+    const cheering = s.phase === 'crossed' && s.celebrating && exitP === 0;
+    if (cheering && !this.reduced) hy -= Math.round(Math.abs(Math.sin(t * 5.5)) * 5);
     if (showHero) {
       ctx.save();
       if (fallP > 0) {
@@ -497,7 +538,7 @@ export class Scene {
         ctx.rect(0, 0, SCENE_W, TOP + s.player.r * TILE + 12);
         ctx.clip();
       }
-      if (crossP > 0) { // the doorway swallows the hero
+      if (exitP > 0) { // the doorway swallows the hero
         ctx.beginPath();
         ctx.rect(0, 12, SCENE_W, SCENE_H);
         ctx.clip();
@@ -505,13 +546,16 @@ export class Scene {
       const reviveP = this.reviveT0 >= 0 ? (now - this.reviveT0) / REVIVE_MS : 1;
       if (reviveP < 0.45) ctx.globalAlpha = Math.max(0, (reviveP - 0.1) / 0.35);
       this.frameOf(ctx, heroFrame(running, frameNo), hx, hy, flip);
+      if (cheering) this.drawCheer(ctx, hx, hy, flip);
       ctx.restore();
     }
 
     // ── lighting: the torch is the only light until the dark lifts ──
     // torch held out beside the head, so the flame never merges with the sprite
     const out = flip ? -1 : 1;
-    const hand = { x: hx + (flip ? HERO_W - 1 - HAND.x : HAND.x) + out, y: hy + HAND.y };
+    const hand = cheering
+      ? { x: hx + (flip ? HERO_W - 1 - CHEER_HAND.x : CHEER_HAND.x), y: hy + CHEER_HAND.y + 9 }
+      : { x: hx + (flip ? HERO_W - 1 - HAND.x : HAND.x) + out, y: hy + HAND.y };
     // a ghost carries no torch: a cold glow of its own lights the stones instead
     const torch = s.ghost ? { x: hx + 8, y: hy + 16 } : { x: hand.x, y: hand.y - 11 };
     const tint = s.ghost ? [0.62, 0.8, 1.05] : [1, 0.68, 0.38];
@@ -520,7 +564,7 @@ export class Scene {
     this.torchGlow += (targetGlow - this.torchGlow) * 0.08;
     const LR = Math.max(1, TORCH_RADIUS * TILE * (s.ghost ? 1 : flick) * this.torchGlow * (s.ghost ? 1 : 1 - 0.75 * fallP));
     const [tr, tg, tb] = tint as [number, number, number];
-    const targetDawn = s.revealAll ? 1 : crossP > 0.35 ? Math.min(1, (crossP - 0.35) / 0.65) : 0;
+    const targetDawn = s.revealAll ? 1 : 0;
     this.dawn += (targetDawn - this.dawn) * 0.05;
     const dawn = this.dawn;
     const ambR = dawn * 1.05, ambG = dawn * 0.98, ambB = dawn * 0.9;
