@@ -117,7 +117,7 @@ export const App = () => {
 
   return (
     <main className="app">
-      {s.me ? <Hud me={s.me} day={s.day?.day ?? null} onHelp={openHelp} /> : <header className="hud" />}
+      {s.me ? <Hud me={s.me} day={s.day?.day ?? null} onHelp={openHelp} hidden={soulLeaving} /> : <header className="hud" />}
       <Stage
         scene={scene} onTap={tap} onFallDone={onFallDone} onCrossDone={onCrossDone}
         onSoulGone={() => {

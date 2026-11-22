@@ -351,7 +351,7 @@ export class CampScene {
     if (torchOn) lights.push({ x: tip.x, y: tip.y, r: 30 * flick * torchFade, k: 1.1, tint: TORCH_TINT });
     if (soulAlpha > 0) lights.push({ x: soul.x + 8, y: soul.y + 12, r: 24, k: 1.0 * soulAlpha, tint: COLD });
     // just enough to make out the husk in the dark: dull, colourless, unlike the soul's glow
-    if (reviving && bodyShown && colour < 1) lights.push({ x: hx + 8, y: hy + 16, r: 11, k: 0.32 * (1 - colour), tint: [0.62, 0.66, 0.6] });
+    if (reviving && bodyShown && colour < 1) lights.push({ x: hx + 8, y: hy + 16, r: 15, k: 0.6 * (1 - colour), tint: [0.62, 0.66, 0.6] });
     const flash = reviving ? Math.max(0, 1 - Math.abs(q - 0.84) / 0.04) : 0;
     if (flash > 0) lights.push({ x: HERO_REST.x + 8, y: HERO_REST.y + 14, r: 34, k: 1.6 * flash, tint: [1, 0.95, 0.9] });
     const breathe = this.reduced ? 0 : 1;

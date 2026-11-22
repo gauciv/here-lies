@@ -31,8 +31,9 @@ export const DayTier = ({ day }: { day: number }) => {
   );
 };
 
-export const Hud = ({ me, day, onHelp }: { me: MeDto; day: number | null; onHelp: () => void }) => (
-  <header className="hud">
+export const Hud = ({ me, day, onHelp, hidden = false }: { me: MeDto; day: number | null; onHelp: () => void; hidden?: boolean }) => (
+  // hidden keeps its space, so the board doesn't jump while a cutscene plays
+  <header className="hud" style={hidden ? { visibility: 'hidden' } : undefined}>
     <div className="hud-brand">
       {day !== null && <DayTier day={day} />}
     </div>
