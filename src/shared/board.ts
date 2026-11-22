@@ -67,13 +67,13 @@ export type Difficulty = {
   comparisons: readonly [number, number];
   /** chance that each of the morning's forgotten slabs tells the truth */
   honesty: number;
-  /** one line on the parchment so the day's mood reads before you step in */
+  /** one short line about how the day plays, shown beside the tier in the game */
   hint: string;
 };
 
-const GENTLE: Difficulty = { name: 'Gentle', pits: [11, 12], comparisons: [1, 2], honesty: 0.8, hint: 'The dead here mostly tell the truth.' };
-const TRICKY: Difficulty = { name: 'Tricky', pits: [12, 14], comparisons: [2, 3], honesty: 0.6, hint: 'Some of the dead here lie.' };
-const CRUEL: Difficulty = { name: 'Cruel', pits: [14, 15], comparisons: [3, 5], honesty: 0.4, hint: 'Trust no slab. Trust the numbers.' };
+const GENTLE: Difficulty = { name: 'Gentle', pits: [11, 12], comparisons: [1, 2], honesty: 0.8, hint: 'Easy footing.' };
+const TRICKY: Difficulty = { name: 'Tricky', pits: [12, 14], comparisons: [2, 3], honesty: 0.6, hint: 'Count twice.' };
+const CRUEL: Difficulty = { name: 'Cruel', pits: [14, 15], comparisons: [3, 5], honesty: 0.4, hint: 'Few safe stones.' };
 
 // A gentle weekly rhythm (UTC): easy at the start of the week, hardest on
 // Friday and Saturday, easing off on Sunday. Every board is crossable on logic
