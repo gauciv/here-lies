@@ -1,22 +1,11 @@
 // Daily board: deterministic from the day number so every player (and the server)
 // sees the same crossing. Pure functions only — imported by client and server.
 
-export const COLS = 7;
-export const ROWS = 9;
+export * from './grid';
+import { COLS, ROWS, START, idx, cellOf, neighbors, isStep, inBounds, type Board, type Cell } from './grid';
+import { solve } from './solver';
+
 export const CANDLES_PER_DAY = 3;
-
-export type Cell = { c: number; r: number };
-
-export type Board = {
-  day: number;
-  cols: number;
-  rows: number;
-  /** pits[idx(c, r)] === true when the stone at (c, r) hides a pit */
-  pits: boolean[];
-  start: Cell;
-};
-
-export const START: Cell = { c: 3, r: ROWS - 1 };
 
 /** Day 1 of Here Lies (UTC). */
 const LAUNCH_UTC = Date.UTC(2026, 10, 21);
@@ -26,26 +15,6 @@ export const dayNumber = (now: number = Date.now()): number =>
   Math.floor((now - LAUNCH_UTC) / DAY_MS) + 1;
 
 export const dayStartUtc = (day: number): number => LAUNCH_UTC + (day - 1) * DAY_MS;
-
-export const idx = (c: number, r: number): number => r * COLS + c;
-export const cellOf = (i: number): Cell => ({ c: i % COLS, r: Math.floor(i / COLS) });
-export const inBounds = (c: number, r: number): boolean =>
-  c >= 0 && r >= 0 && c < COLS && r < ROWS;
-
-export const isStep = (a: Cell, b: Cell): boolean =>
-  Math.max(Math.abs(a.c - b.c), Math.abs(a.r - b.r)) === 1;
-
-export const neighbors = (c: number, r: number): Cell[] => {
-  const out: Cell[] = [];
-  for (let dr = -1; dr <= 1; dr++)
-    for (let dc = -1; dc <= 1; dc++)
-      if ((dc || dr) && inBounds(c + dc, r + dr)) out.push({ c: c + dc, r: r + dr });
-  return out;
-};
-
-/** Number of pits touching a stone (8-neighbourhood). */
-export const clue = (board: Board, c: number, r: number): number =>
-  neighbors(c, r).reduce((n, p) => n + (board.pits[idx(p.c, p.r)] ? 1 : 0), 0);
 
 export const mulberry32 = (seed: number): (() => number) => {
   let a = seed >>> 0;
@@ -88,33 +57,70 @@ export const shortestCrossing = (pits: boolean[], start: Cell = START): number =
   return -1;
 };
 
-export const generateBoard = (day: number): Board => {
-  for (let attempt = 0; attempt < 500; attempt++) {
-    const rand = mulberry32(hashInts(0x4e1e, day, attempt));
-    const pits = new Array<boolean>(COLS * ROWS).fill(false);
-    const safe = new Set<number>([idx(START.c, START.r)]);
-    for (const n of neighbors(START.c, START.r)) safe.add(idx(n.c, n.r));
+export type Difficulty = {
+  name: string;
+  /** pits placed: [min, max] */
+  pits: readonly [number, number];
+  /** two-number comparisons a careful player must make: [min, max] */
+  comparisons: readonly [number, number];
+};
 
-    const target = 11 + Math.floor(rand() * 4); // 11–14 pits
-    let placed = 0;
-    while (placed < target) {
-      const i = Math.floor(rand() * COLS * ROWS);
-      if (safe.has(i) || pits[i]) continue;
-      pits[i] = true;
-      placed++;
-    }
+// Difficulty climbs through the week (UTC), crossword-style. Every board is
+// guaranteed crossable on logic alone; harder days need more cross-checking.
+const WEEK: readonly Difficulty[] = [
+  { name: 'Brutal', pits: [15, 16], comparisons: [4, 9] }, // Sunday
+  { name: 'Gentle', pits: [11, 12], comparisons: [1, 2] }, // Monday
+  { name: 'Gentle', pits: [11, 12], comparisons: [1, 2] },
+  { name: 'Tricky', pits: [12, 13], comparisons: [2, 3] },
+  { name: 'Tricky', pits: [13, 14], comparisons: [2, 4] },
+  { name: 'Cruel', pits: [14, 15], comparisons: [3, 5] },
+  { name: 'Cruel', pits: [14, 15], comparisons: [3, 6] }, // Saturday
+];
 
-    // Reject boards that are unwinnable, or trivially straight.
-    const len = shortestCrossing(pits);
-    if (len < 0) continue;
-    const straightOpen = Array.from({ length: ROWS }, (_, r) => !pits[idx(START.c, r)]).every(Boolean);
-    if (straightOpen) continue;
-    const farRowSafe = Array.from({ length: COLS }, (_, c) => !pits[idx(c, 0)]).filter(Boolean).length;
-    if (farRowSafe > 5) continue;
+export const difficultyOf = (day: number): Difficulty => WEEK[new Date(dayStartUtc(day)).getUTCDay()] ?? WEEK[1]!;
 
-    return { day, cols: COLS, rows: ROWS, pits, start: START };
+const placePits = (rand: () => number, count: number): boolean[] => {
+  const pits = new Array<boolean>(COLS * ROWS).fill(false);
+  const safe = new Set<number>([idx(START.c, START.r)]);
+  for (const n of neighbors(START.c, START.r)) safe.add(idx(n.c, n.r));
+  let placed = 0;
+  while (placed < count) {
+    const i = Math.floor(rand() * COLS * ROWS);
+    if (safe.has(i) || pits[i]) continue;
+    pits[i] = true;
+    placed++;
   }
-  throw new Error(`could not generate board for day ${day}`);
+  return pits;
+};
+
+const boardCache = new Map<number, Board>();
+
+/**
+ * The day's crossing. Deterministic per day, and always solvable without guessing:
+ * a careful-human solver must reach the far wall using only the numbers, with the
+ * amount of cross-checking set by the day's difficulty.
+ */
+export const generateBoard = (day: number): Board => {
+  const cached = boardCache.get(day);
+  if (cached) return cached;
+  const diff = difficultyOf(day);
+  let fallback: Board | null = null;
+  for (let attempt = 0; attempt < 6000; attempt++) {
+    const rand = mulberry32(hashInts(0x4e1e, day, attempt));
+    const count = diff.pits[0] + Math.floor(rand() * (diff.pits[1] - diff.pits[0] + 1));
+    const board: Board = { day, cols: COLS, rows: ROWS, pits: placePits(rand, count), start: START };
+    const result = solve(board);
+    if (!result.solved) continue;
+    if (result.comparisons >= diff.comparisons[0] && result.comparisons <= diff.comparisons[1]) {
+      boardCache.set(day, board);
+      return board;
+    }
+    if (!fallback || result.comparisons >= 1) fallback = board;
+  }
+  // Practically unreachable; still guarantee a solvable board rather than failing.
+  if (!fallback) throw new Error(`could not generate board for day ${day}`);
+  boardCache.set(day, fallback);
+  return fallback;
 };
 
 export type RunOutcome =

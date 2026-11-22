@@ -5,6 +5,7 @@ import {
   ROWS,
   START,
   clue,
+  difficultyOf,
   generateBoard,
   idx,
   judgeRun,
@@ -26,7 +27,8 @@ void test('every board for a year is winnable with a safe start', () => {
     assert.equal(b.pits[idx(START.c, START.r)], false);
     for (const n of neighbors(START.c, START.r)) assert.equal(b.pits[idx(n.c, n.r)], false);
     const count = b.pits.filter(Boolean).length;
-    assert.ok(count >= 11 && count <= 14, `day ${day} has ${count} pits`);
+    const diff = difficultyOf(day);
+    assert.ok(count >= diff.pits[0] && count <= diff.pits[1], `day ${day} has ${count} pits`);
   }
 });
 
