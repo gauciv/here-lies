@@ -15,13 +15,12 @@ export const SCENE_W = COLS * TILE;
 export const SCENE_H = TOP + ROWS * TILE + BOTTOM;
 
 export type GraveView = {
-  /** the most trusted carved arrow, or null if nobody carved yet */
+  /** the slab's arrow, or null if nobody carved it */
   arrow: number | null;
   falls: number;
-  honest: number;
-  liar: number;
-  carved: boolean;
   mine: boolean;
+  /** only once the dark lifts: did the arrow tell the truth? */
+  truth: boolean | null;
 };
 
 export type Phase = 'walking' | 'falling' | 'fallen' | 'crossing' | 'crossed' | 'idle';
@@ -45,8 +44,6 @@ const TORCH_RADIUS = TORCH_REACH + 0.6;
 export const isLit = (player: Cell, cell: Cell): boolean =>
   Math.hypot(player.c - cell.c, player.r - cell.r) <= TORCH_REACH;
 
-export const isKnownLiar = (g: GraveView): boolean => g.honest + g.liar >= 3 && g.liar > g.honest * 1.5;
-export const isTrusted = (g: GraveView): boolean => g.honest + g.liar >= 3 && g.honest > g.liar * 2;
 
 export type SceneEvents = {
   onFallDone?: () => void;
@@ -204,7 +201,8 @@ export class Scene {
   private ensureLayer(s: SceneState, doorOpen: boolean): void {
     if (!this.atlas) return;
     let key = `${s.board.day}|${doorOpen ? 1 : 0}|${[...s.revealed].sort((a, b) => a - b).join(',')}|${[...s.knownPits].join(',')}|`;
-    s.graves.forEach((g, i) => { key += `${i}:${g.arrow}:${g.falls}:${g.honest}:${g.liar}:${g.mine ? 1 : 0};`; });
+    key += s.revealAll ? 'R|' : '';
+    s.graves.forEach((g, i) => { key += `${i}:${g.arrow}:${g.truth}:${g.mine ? 1 : 0};`; });
     if (key === this.layerKey) return;
     this.layerKey = key;
     const x = this.lctx;
@@ -219,7 +217,10 @@ export class Scene {
       }
     // entrance stairs below the start stone
     this.frameOf(x, 'floor_stairs', 3 * TILE, TOP + ROWS * TILE);
-    for (const p of s.knownPits) this.frameOf(x, 'hole', (p % COLS) * TILE, TOP + Math.floor(p / COLS) * TILE);
+    // your own falls stay open; when the dark lifts, every real pit is shown
+    s.board.pits.forEach((isPit, p) => {
+      if (isPit && (s.revealAll || s.knownPits.has(p))) this.frameOf(x, 'hole', (p % COLS) * TILE, TOP + Math.floor(p / COLS) * TILE);
+    });
     s.graves.forEach((g, i) => this.drawGrave(x, i, g));
     // numbers last; on a slab they move to the corner so the arrow stays clear
     for (const i of s.revealed) this.drawClue(x, s.board, i % COLS, Math.floor(i / COLS), s.graves.has(i));
@@ -254,16 +255,9 @@ export class Scene {
     const X = c * TILE + 2, Y = TOP + r * TILE + 2;
     const sp = getSprites();
     x.drawImage((g.mine ? sp.slabMine : sp.slab).canvas, X, Y);
-    // the more who fell from here, the more the slab cracks
-    if (g.falls >= 2) {
-      this.px(x, 'ink', X + 9, Y + 1, 1, 2); this.px(x, 'ink', X + 8, Y + 3, 1, 1); this.px(x, 'ink', X + 9, Y + 4, 1, 1);
-    }
-    if (g.falls >= 3) {
-      this.px(x, 'ink', X + 1, Y + 8, 2, 1); this.px(x, 'ink', X + 3, Y + 9, 1, 1);
-      this.px(x, 'void0', X + 10, Y + 9, 1, 2); this.px(x, 'void0', X + 9, Y + 10, 1, 1);
-    }
     if (g.arrow !== null) {
-      const col: ColorKey = isKnownLiar(g) ? 'red2' : isTrusted(g) ? 'warm4' : 'pst1';
+      // plain carving while you walk; gold for truth, red for a lie once the dark lifts
+      const col: ColorKey = g.truth === true ? 'warm4' : g.truth === false ? 'red2' : 'pst1';
       if (col !== 'pst1') x.drawImage(sp.arrow(g.arrow, 'ink').canvas, X + 3, Y + 3); // outline for coloured arrows
       x.drawImage(sp.arrow(g.arrow, col).canvas, X + 2, Y + 2);
     }
