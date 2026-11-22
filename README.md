@@ -47,6 +47,8 @@ Graves make the board easier as the day goes on, so crossing late is not the sam
 
 Late players can still cross and enjoy reading the graves; they just can't claim to have blazed the trail.
 
+After crossing you can choose to **wear your title as subreddit flair** (for example *Trailblazer · Here Lies day 2*). It is never set without pressing the button.
+
 ### Difficulty rises through the week
 
 | Day | Tier | What it means |
