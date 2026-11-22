@@ -1,7 +1,7 @@
 // Authoritative game rules over a tiny key-value interface. The Devvit server
 // runs this against Redis; the local preview runs it against an in-memory map.
 import { CANDLES_PER_DAY, ROWS, cellOf, dayNumber, generateBoard, idx, judgeRun, mulberry32, neighbors, type Cell } from './board';
-import { EPITAPHS, FORGOTTEN, isAnonymous, isEpitaphId } from './epitaphs';
+import { FORGOTTEN, directionBetween, isAnonymous, isDirection, validDirections } from './epitaphs';
 import { canShare, shareText } from './share';
 import { pioneerFlair, pioneerScore, type Flair } from './pioneer';
 import type {
@@ -38,8 +38,12 @@ export class GameError extends Error {}
 
 const K = {
   stats: (d: number) => `d:${d}:stats`,
+  /** deaths per pit (server-only; drives the pioneer score) */
   falls: (d: number) => `d:${d}:falls`,
-  cell: (d: number, i: number) => `d:${d}:cell:${i}`,
+  /** epitaph ids carved on the slab at stone i, by trust */
+  cell: (d: number, i: number) => `d:${d}:slab:${i}`,
+  /** deaths per slab stone */
+  slabFalls: (d: number) => `d:${d}:slabfalls`,
   ep: (d: number, id: string) => `d:${d}:ep:${id}`,
   epSeq: (d: number) => `d:${d}:epseq`,
   user: (d: number, u: string) => `d:${d}:u:${u}`,
@@ -98,6 +102,7 @@ export class Engine {
       steps: u.steps ? num(u.steps) : null,
       revealed: parseList(u.revealed),
       uncarved: u.uncarved ? num(u.uncarved) : null,
+      fellInto: parseList(u.fellAt),
       streak: last >= day - 1 ? num(st.count) : 0,
       shared: u.shared === '1',
       pioneer: u.pioneer ? num(u.pioneer) : null,
@@ -108,11 +113,11 @@ export class Engine {
     const e = await this.store.hGetAll(K.ep(day, id));
     if (!e.user) return null;
     const v = await this.store.hGet(K.votes(day, viewer), id);
-    const text = num(e.text);
+    const arrow = num(e.arrow);
     return {
       id,
       user: e.user,
-      text: isEpitaphId(text) ? text : 0,
+      arrow: isDirection(arrow) ? arrow : 0,
       step: num(e.step),
       at: num(e.at),
       honest: num(e.honest),
@@ -123,10 +128,10 @@ export class Engine {
 
   private async grave(day: number, i: number, viewer: string): Promise<GraveDto> {
     const [falls, topIds, carved, mineList] = await Promise.all([
-      this.store.hGet(K.falls(day), String(i)),
+      this.store.hGet(K.slabFalls(day), String(i)),
       this.store.zTop(K.cell(day, i), 1),
       this.store.zCard(K.cell(day, i)),
-      this.store.hGet(K.user(day, viewer), 'fellAt'),
+      this.store.hGet(K.user(day, viewer), 'diedFrom'),
     ]);
     const topId = topIds[0];
     return {
@@ -159,27 +164,42 @@ export class Engine {
       [candidates[k], candidates[j]] = [candidates[j]!, candidates[k]!];
     }
     const at = Date.now() - 6 * 3_600_000;
-    for (const i of candidates.slice(0, 3)) {
+    const used = new Set<number>();
+    for (const pit of candidates) {
+      if (used.size >= 3) break;
+      const p = cellOf(pit);
+      // the slab goes on a safe neighbour the forgotten soul stepped from
+      const stones = neighbors(p.c, p.r)
+        .map((n) => idx(n.c, n.r))
+        .filter((n) => !board.pits[n] && !used.has(n) && n !== idx(board.start.c, board.start.r));
+      if (!stones.length) continue;
+      const stone = stones[Math.floor(rand() * stones.length)]!;
+      used.add(stone);
+      const truth = directionBetween(cellOf(stone), p) ?? 0;
+      const others = validDirections(cellOf(stone)).filter((d) => d !== truth);
+      const arrow = rand() < 0.6 || !others.length ? truth : others[Math.floor(rand() * others.length)]!;
       const id = String(await this.store.incrBy(K.epSeq(day), 1));
       await this.store.hSet(K.ep(day, id), {
         user: FORGOTTEN,
-        i: String(i),
-        text: String(Math.floor(rand() * EPITAPHS.length)),
+        i: String(stone),
+        pit: String(pit),
+        arrow: String(arrow),
         step: '0',
         at: String(at),
         honest: '0',
         liar: '0',
       });
-      await this.store.zAdd(K.cell(day, i), id, epScore(0, 0) + at / 1e13);
-      await this.store.hIncrBy(K.falls(day), String(i), 1);
-      await this.store.hSet(K.seededCells(day), { [String(i)]: '1' });
+      await this.store.zAdd(K.cell(day, stone), id, epScore(0, 0) + at / 1e13);
+      await this.store.hIncrBy(K.slabFalls(day), String(stone), 1);
+      await this.store.hIncrBy(K.falls(day), String(pit), 1);
+      await this.store.hSet(K.seededCells(day), { [String(pit)]: '1' });
     }
   }
 
   async init(day: number, user: string, postId: string): Promise<InitResponse> {
     await this.ensureSeeded(day);
-    const falls = await this.store.hGetAll(K.falls(day));
-    const cells = Object.keys(falls).map(Number).filter(Number.isInteger);
+    const slabs = await this.store.hGetAll(K.slabFalls(day));
+    const cells = Object.keys(slabs).map(Number).filter(Number.isInteger);
     const [dayDto, me, graves] = await Promise.all([
       this.dayDto(day),
       this.me(day, user),
@@ -211,7 +231,10 @@ export class Engine {
     await this.assertCanWalk(day, user);
     const outcome = judgeRun(generateBoard(day), path);
     if (outcome.kind !== 'fell') throw new GameError('That walk did not end in a pit');
-    const i = idx(outcome.at.c, outcome.at.r);
+    const pit = idx(outcome.at.c, outcome.at.r);
+    // the slab goes where they last stood safely: the stone before the pit
+    const from = path.length >= 2 ? path[path.length - 2]! : generateBoard(day).start;
+    const stone = idx(from.c, from.r);
     // consume a candle atomically; concurrent requests can't overspend
     const spent = await this.store.hIncrBy(K.user(day, user), 'spent', 1);
     if (spent > CANDLES_PER_DAY) {
@@ -220,25 +243,31 @@ export class Engine {
     }
     const u = await this.store.hGetAll(K.user(day, user));
     const fellAt = parseList(u.fellAt);
-    fellAt.push(i);
+    fellAt.push(pit);
+    const diedFrom = parseList(u.diedFrom);
+    diedFrom.push(stone);
     await Promise.all([
       this.store.hSet(K.user(day, user), {
-        uncarved: String(i),
+        uncarved: String(stone),
+        uncarvedPit: String(pit),
         uncarvedStep: String(outcome.steps),
         fellAt: JSON.stringify(fellAt),
+        diedFrom: JSON.stringify(diedFrom),
       }),
-      this.store.hIncrBy(K.falls(day), String(i), 1),
+      this.store.hIncrBy(K.falls(day), String(pit), 1),
+      this.store.hIncrBy(K.slabFalls(day), String(stone), 1),
       this.store.hIncrBy(K.stats(day), 'fallen', 1),
     ]);
     await this.recordPath(day, user, path);
-    const [meDto, grave, dayDto] = await Promise.all([this.me(day, user), this.grave(day, i, user), this.dayDto(day)]);
+    const [meDto, grave, dayDto] = await Promise.all([this.me(day, user), this.grave(day, stone, user), this.dayDto(day)]);
     return { type: 'fall', me: meDto, grave, day: dayDto };
   }
 
-  async carve(day: number, user: string, i: number, text: unknown): Promise<CarveResponse> {
-    if (!isEpitaphId(text)) throw new GameError('Unknown epitaph');
+  async carve(day: number, user: string, i: number, arrow: unknown): Promise<CarveResponse> {
+    if (!isDirection(arrow)) throw new GameError('Pick a direction to carve');
     const u = await this.store.hGetAll(K.user(day, user));
     if (!u.uncarved || num(u.uncarved) !== i) throw new GameError('Nothing to carve here');
+    if (!validDirections(cellOf(i)).includes(arrow)) throw new GameError('That arrow points off the edge');
     // one epitaph per fall, even under concurrent requests
     if (!(await this.store.hSetNX(K.user(day, user), `carved:${num(u.spent)}`, '1'))) {
       throw new GameError('Your last words are already carved');
@@ -247,14 +276,15 @@ export class Engine {
     await this.store.hSet(K.ep(day, id), {
       user,
       i: String(i),
-      text: String(text),
+      pit: u.uncarvedPit ?? '',
+      arrow: String(arrow),
       step: u.uncarvedStep ?? '0',
       at: String(Date.now()),
       honest: '0',
       liar: '0',
     });
     await this.store.zAdd(K.cell(day, i), id, epScore(0, 0) + Date.now() / 1e13);
-    await this.store.hSet(K.user(day, user), { uncarved: '', uncarvedStep: '' });
+    await this.store.hSet(K.user(day, user), { uncarved: '', uncarvedPit: '', uncarvedStep: '' });
     const [grave, me] = await Promise.all([this.grave(day, i, user), this.me(day, user)]);
     return { type: 'carve', grave, me };
   }
