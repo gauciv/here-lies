@@ -30,6 +30,9 @@ export type Store = {
 
 export class GameError extends Error {}
 
+/** The fastest anyone can walk a step: the floor under a crossing time. */
+const MIN_STEP_MS = 200;
+
 /** Bump when the stored shape changes, so old days don't mix with new rules. */
 const NS = 'v6:';
 
@@ -357,7 +360,8 @@ export class Engine {
       await this.store.hIncrBy(K.user(day, user), 'spent', -1);
       throw new GameError('Your candles are spent for today');
     }
-    // the last candle stops the clock
+    // a fall also starts the clock (if entering somehow didn't); the last candle stops it
+    await this.store.hSetNX(K.user(day, user), 'startedAt', String(Date.now()));
     if (spent === CANDLES_PER_DAY) await this.store.hSetNX(K.user(day, user), 'endedAt', String(Date.now()));
     await this.recordPath(day, user, path);
     const carving = await this.claimCarving(day, user, stone);
@@ -441,13 +445,16 @@ export class Engine {
     if (outcome.kind !== 'crossed') throw new GameError('That walk did not reach the far wall');
     if (!(await this.store.hSetNX(K.user(day, user), 'crossLock', '1'))) throw new GameError('You already crossed today');
     const rank = await this.store.hIncrBy(K.stats(day), 'crossed', 1);
-    // time since you first stepped in (an older client that never started the clock counts from now)
+    // time since you first stepped in. Only a clock started by an earlier request is ranked
+    // (no skipping straight to the door), and no time beats walking the path at a human pace.
     const now = Date.now();
-    await this.store.hSetNX(K.user(day, user), 'startedAt', String(now));
-    const startedAt = num(await this.store.hGet(K.user(day, user), 'startedAt'), now);
-    const time = Math.max(0, now - startedAt);
-    await this.store.hSet(K.user(day, user), { crossed: '1', rank: String(rank), steps: String(outcome.steps), time: String(time), endedAt: String(now) });
-    await this.store.zAdd(K.times(day), user, -time);
+    const started = await this.store.hGet(K.user(day, user), 'startedAt');
+    await this.store.hSet(K.user(day, user), { crossed: '1', rank: String(rank), steps: String(outcome.steps), endedAt: String(now) });
+    if (started) {
+      const time = Math.max(now - num(started, now), outcome.steps * MIN_STEP_MS);
+      await this.store.hSet(K.user(day, user), { time: String(time) });
+      await this.store.zAdd(K.times(day), user, -time);
+    }
     await this.recordPath(day, user, path);
     // streaks only advance on today's crossing, never by replaying an old post
     if (day === dayNumber()) {

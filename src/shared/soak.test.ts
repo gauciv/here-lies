@@ -103,7 +103,8 @@ void test('every room plays end to end with many walkers and no broken invariant
     // a perfect player crosses every room with no falls
     const perfect = bfs(board, board.start, (c) => c.c === board.door.c && c.r === board.door.r);
     if (!perfect) { fail(day, `no crossing exists in ${board.name}`); continue; }
-    const pc = await engine.cross(day, 'perfect', perfect);
+    await engine.start(day, 'perfect');
+  const pc = await engine.cross(day, 'perfect', perfect);
     checkState(day, board, pc, 'perfect');
     if (!pc.me.crossed || pc.me.rank !== 1) fail(day, 'perfect player did not cross first');
     await expectReject(day, 'a second crossing', engine.cross(day, 'perfect', perfect));

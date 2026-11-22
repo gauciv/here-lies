@@ -107,6 +107,7 @@ void test('concurrent falls cannot overspend candles', async () => {
 void test('sharing: only after the run, once, and a failed post can be retried', async () => {
   const e = new Engine(new MemoryStore());
   await assert.rejects(e.claimShare(DAY, 'sam'), /Finish/);
+  await e.start(DAY, 'sam');
   await e.cross(DAY, 'sam', crossPath);
   const share = await e.claimShare(DAY, 'sam', '   my own   caption  ');
   assert.equal(share.title, 'my own caption');
@@ -153,6 +154,15 @@ void test('crossings are timed from the first step in, and ranked by speed among
     const flair = await e.flairFor(DAY, 'quick');
     assert.match(flair.text, /^Pioneer · Here Lies day /);
     assert.ok(!flair.text.includes(','));
+    // skipping straight to the door (no clock started earlier) crosses, but unranked
+    const sneak = await e.cross(DAY, 'sneak', crossPath);
+    assert.equal(sneak.me.crossed, true);
+    assert.equal(sneak.me.time, null);
+    assert.equal(sneak.me.standing, null);
+    // and nobody's time can beat walking the path at a human pace
+    await e.start(DAY, 'blink');
+    const blink = await e.cross(DAY, 'blink', crossPath);
+    assert.equal(blink.me.time, crossPath.length * 200);
   } finally {
     Date.now = realNow;
   }
