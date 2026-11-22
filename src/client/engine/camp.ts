@@ -184,6 +184,8 @@ export class CampScene {
       this.tile('wall_mid', col * T, T);
     }
     const dx = DOOR_C * T - 8;
+    // the open leaf's doorway is see-through: black it out, or the wall shows through
+    if (p >= 0.72) this.px('void0', dx + 3, 3, 26, 27);
     this.tile(p >= 0.72 ? 'doors_leaf_open' : 'doors_leaf_closed', dx, 0);
     this.tile('doors_frame_left', dx - 16, 0);
     this.tile('doors_frame_right', dx + 32, 0);

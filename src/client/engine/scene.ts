@@ -292,6 +292,8 @@ export class Scene {
     const dc = board.door.c;
     for (const c of [0, COLS - 1]) if (Math.abs(c - dc) >= 2) this.frameOf(x, 'wall_banner_red', c * TILE, 16);
     const dx = doorX(board);
+    // the open leaf's doorway is see-through: black it out, or the wall shows through
+    if (doorOpen) this.px(x, 'void0', dx + 3, 3, 26, 27);
     this.frameOf(x, doorOpen ? 'doors_leaf_open' : 'doors_leaf_closed', dx, 0);
     this.frameOf(x, 'doors_frame_left', dx - 16, 0);
     this.frameOf(x, 'doors_frame_right', dx + 32, 0);
