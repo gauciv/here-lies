@@ -7,6 +7,7 @@ import atlasUrl from '../assets/dungeon.png';
 import { FRAMES, HERO_IDLE, HERO_RUN, type FrameName } from './atlas';
 import { C, type ColorKey } from './palette';
 import { getSprites } from './sprites';
+import { pointedCell } from '../../shared/epitaphs';
 
 export const TILE = 16;
 export const TOP = 32;
@@ -37,6 +38,10 @@ export type SceneState = {
   phase: Phase;
   /** the dark has lifted (crossed, or out of candles): show the whole board */
   revealAll: boolean;
+  /** just died: the hero stands on their slab as a ghost while carving */
+  ghost: boolean;
+  /** carving preview: the slab's stone and the arrow being considered */
+  carvePreview: { stone: number; dir: number | null } | null;
 };
 
 /** How far the torch reaches, in tiles (centre to centre). Drawing and tapping share it. */
@@ -107,6 +112,7 @@ export class Scene {
   private motes: Mote[] = [];
   private embers: Mote[] = [];
   private shatters: Shatter[] = [];
+  private ghostCanvas: HTMLCanvasElement | null = null;
   private raf = 0;
   private torchGlow = 1;
   private dawn = 0;
@@ -285,6 +291,60 @@ export class Scene {
     }
   }
 
+  /** The hero as a pale, floating ghost (drawn after lighting, so it glows). */
+  private drawGhost(ctx: CanvasRenderingContext2D, hx: number, hy: number, flip: boolean, t: number): void {
+    if (!this.atlas) return;
+    if (!this.ghostCanvas) {
+      this.ghostCanvas = document.createElement('canvas');
+      this.ghostCanvas.width = HERO_W;
+      this.ghostCanvas.height = HERO_H;
+    }
+    const g = this.ghostCanvas.getContext('2d');
+    if (!g) return;
+    g.clearRect(0, 0, HERO_W, HERO_H);
+    g.globalCompositeOperation = 'source-over';
+    this.frameOf(g, heroFrame(false, 0), 0, 0, flip);
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = C.ghost3;
+    g.globalAlpha = 0.75;
+    g.fillRect(0, 0, HERO_W, HERO_H);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    const bob = this.reduced ? 0 : Math.round(Math.sin(t * 2.4) * 1.5) - 2;
+    ctx.save();
+    ctx.globalAlpha = 0.72;
+    ctx.drawImage(this.ghostCanvas, hx, hy + bob);
+    ctx.restore();
+  }
+
+  /** The slab with the chosen arrow, a dotted line, and the stone it points at. */
+  private drawCarvePreview(ctx: CanvasRenderingContext2D, stone: number, dir: number | null, t: number): void {
+    const sc = stone % COLS, sr = Math.floor(stone / COLS);
+    const X = sc * TILE, Y = TOP + sr * TILE;
+    const sp = getSprites();
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.drawImage(sp.slab.canvas, X + 2, Y + 2);
+    ctx.restore();
+    if (dir === null) return;
+    const pulse = this.reduced ? 1 : 0.5 + 0.5 * Math.sin(t * 5);
+    ctx.drawImage(sp.arrow(dir, 'ink').canvas, X + 5, Y + 5);
+    ctx.drawImage(sp.arrow(dir, 'warm4').canvas, X + 4, Y + 4);
+    const to = pointedCell({ c: sc, r: sr }, dir);
+    if (to.c < 0 || to.r < 0 || to.c >= COLS || to.r >= ROWS) return;
+    // dotted line from slab to target
+    const ax = X + 8, ay = Y + 8, bx = to.c * TILE + 8, by = TOP + to.r * TILE + 8;
+    for (let k = 3; k <= 13; k += 2) {
+      const f = k / 16;
+      this.px(ctx, 'warm5', Math.round(ax + (bx - ax) * f), Math.round(ay + (by - ay) * f));
+    }
+    // the stone it points at, outlined in red: "the pit is here"
+    const TX = to.c * TILE, TY = TOP + to.r * TILE, e = TILE - 2;
+    const col: ColorKey = pulse > 0.5 ? 'red2' : 'red1';
+    this.px(ctx, col, TX + 1, TY + 1, e, 1); this.px(ctx, col, TX + 1, TY + e, e, 1);
+    this.px(ctx, col, TX + 1, TY + 1, 1, e); this.px(ctx, col, TX + e, TY + 1, 1, e);
+  }
+
   // ── per frame ────────────────────────────────────────────────────────────
   private frame(now: number): void {
     const s = this.state;
@@ -360,7 +420,7 @@ export class Scene {
     // hero
     const hx = Math.round(walkX * TILE + (TILE - HERO_W) / 2);
     let hy = Math.round(TOP + walkY * TILE + 14 - (HERO_H - 1) - hop);
-    const showHero = s.phase !== 'fallen' && s.phase !== 'idle' && crossP <= 0.6;
+    const showHero = !s.ghost && s.phase !== 'fallen' && s.phase !== 'idle' && crossP <= 0.6;
     const running = hopP >= 0 || (crossP > 0 && crossP < 0.6);
     const frameNo = running
       ? Math.floor(((hopP >= 0 ? hopP : crossP * 6) * 4) % 4)
@@ -387,11 +447,14 @@ export class Scene {
     // torch held out beside the head, so the flame never merges with the sprite
     const out = flip ? -1 : 1;
     const hand = { x: hx + (flip ? HERO_W - 1 - HAND.x : HAND.x) + out, y: hy + HAND.y };
-    const torch = { x: hand.x, y: hand.y - 11 };
+    // a ghost carries no torch: a cold glow of its own lights the stones instead
+    const torch = s.ghost ? { x: hx + 8, y: hy + 16 } : { x: hand.x, y: hand.y - 11 };
+    const tint = s.ghost ? [0.62, 0.8, 1.05] : [1, 0.68, 0.38];
     const flick = this.reduced ? 1 : 1 + 0.06 * Math.sin(t * 9.1) + 0.04 * Math.sin(t * 15.7 + 1.3) + 0.025 * Math.sin(t * 37.0);
-    const targetGlow = s.phase === 'fallen' || s.phase === 'idle' ? 0 : 1;
+    const targetGlow = s.ghost ? 0.8 : s.phase === 'fallen' || s.phase === 'idle' ? 0 : 1;
     this.torchGlow += (targetGlow - this.torchGlow) * 0.08;
-    const LR = Math.max(1, TORCH_RADIUS * TILE * flick * this.torchGlow * (1 - 0.75 * fallP));
+    const LR = Math.max(1, TORCH_RADIUS * TILE * (s.ghost ? 1 : flick) * this.torchGlow * (s.ghost ? 1 : 1 - 0.75 * fallP));
+    const [tr, tg, tb] = tint as [number, number, number];
     const targetDawn = s.revealAll ? 1 : crossP > 0.35 ? Math.min(1, (crossP - 0.35) / 0.65) : 0;
     this.dawn += (targetDawn - this.dawn) * 0.05;
     const dawn = this.dawn;
@@ -409,7 +472,7 @@ export class Scene {
         if (dd < 1) {
           // near the flame: bright and warm; toward the edge: dim, then nothing
           const f = (1 - dd) * (1 - dd) * 1.9;
-          lr += f; lg += 0.68 * f; lb += 0.38 * f;
+          lr += tr * f; lg += tg * f; lb += tb * f;
         }
         const th = BAYER[(x & 3) | ((y & 3) << 2)]!;
         const o = (y * SCENE_W + x) * 4;
@@ -442,6 +505,10 @@ export class Scene {
       }
       if (!this.reduced && blink(99, 2) > 0.6) this.px(ctx, 'warm4', DOOR_X + 15, 30, 2, 1);
     }
+
+    // carving: your ghost on the slab, and a preview of the arrow being considered
+    if (s.ghost) this.drawGhost(ctx, hx, hy, flip, t);
+    if (s.carvePreview) this.drawCarvePreview(ctx, s.carvePreview.stone, s.carvePreview.dir, t);
 
     // step markers: corner brackets on stones you can step to
     if (s.phase === 'walking' && this.hopT0 < 0) {
