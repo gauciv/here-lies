@@ -44,8 +44,6 @@ export type SceneState = {
   fading: boolean;
   /** game over: the soul rises from its pit and drifts to the entrance, ignoring the stones */
   soulLeaving: boolean;
-  /** crossed: the dwarf cheers before the door, still in the dark */
-  celebrating: boolean;
   /** 'Continue' after crossing: the dwarf walks out through the door */
   exiting: boolean;
 };
@@ -506,9 +504,6 @@ export class Scene {
       ? Math.floor(((hopP >= 0 ? hopP : exitP * 6) * 4) % 4)
       : this.reduced ? 0 : Math.floor(now / IDLE_FRAME_MS) % 4;
     const flip = this.facing < 0;
-    // cheering at the door: hopping for joy, the torch thrust up high
-    const cheering = s.phase === 'crossed' && s.celebrating && exitP === 0;
-    if (cheering && !this.reduced) hy -= Math.round(Math.abs(Math.sin(t * 5.5)) * 5);
     if (showHero) {
       ctx.save();
       if (fallP > 0) {
@@ -531,8 +526,7 @@ export class Scene {
     // ── lighting: the torch is the only light until the dark lifts ──
     // torch held out beside the head, so the flame never merges with the sprite
     const out = flip ? -1 : 1;
-    // cheering, the torch is thrust up high; otherwise it's held out beside the head
-    const hand = { x: hx + (flip ? HERO_W - 1 - HAND.x : HAND.x) + out, y: hy + HAND.y - (cheering ? 7 : 0) };
+    const hand = { x: hx + (flip ? HERO_W - 1 - HAND.x : HAND.x) + out, y: hy + HAND.y };
     // a ghost carries no torch: a cold glow of its own lights the stones instead
     const torch = s.ghost ? { x: hx + 8, y: hy + 16 } : { x: hand.x, y: hand.y - 11 };
     const tint = s.ghost ? [0.62, 0.8, 1.05] : [1, 0.68, 0.38];
@@ -615,19 +609,6 @@ export class Scene {
         this.px(ctx, col, X + e - 1, Y + 1, 2, 1); this.px(ctx, col, X + e, Y + 1, 1, 2);
         this.px(ctx, col, X + 1, Y + e, 2, 1); this.px(ctx, col, X + 1, Y + e - 1, 1, 2);
         this.px(ctx, col, X + e - 1, Y + e, 2, 1); this.px(ctx, col, X + e, Y + e - 1, 1, 2);
-      }
-    }
-
-    // a crossing: golden sparks burst up and drift around the cheering dwarf
-    if (cheering && !this.reduced) {
-      for (let k = 0; k < 12; k++) {
-        const q = (t * 0.8 + hash2(k, 21)) % 1;
-        if (q > 0.85) continue;
-        const ang = hash2(k, 5) * Math.PI * 2;
-        const r = 4 + q * 13;
-        const px = Math.round(hx + 8 + Math.cos(ang) * r);
-        const py = Math.round(hy + 12 + Math.sin(ang) * r * 0.6 - q * 10);
-        this.px(ctx, q < 0.3 ? 'warm6' : q < 0.6 ? 'warm5' : 'warm4', px, py);
       }
     }
 

@@ -27,6 +27,13 @@ const ENTER_MS = 3600;
 const REVIVE_MS = 7200;
 /** back from a crossing: he just walks in from the door to the fire */
 const RETURN_MS = 3000;
+/** after a crossing: where the dwarf celebrates in the dark, and how long the walk to the fire takes */
+const VICTORY_SPOT = { x: 48, y: 44 };
+/** Continue: two seconds of walking ahead (the floor rolls by), then the fire comes into view */
+const WALK_MS = 2000;
+const HOME_MS = 2900;
+/** where the fire settles, ahead of him, when he finally sees it */
+const FIRE_AHEAD = { x: 56, y: 34 };
 /** where the soul hovers beside the fire, waiting for its body */
 const SOUL_REST = { x: 67, y: 40 };
 /** the dwarf sprite's hand, facing right */
@@ -72,6 +79,9 @@ export class CampScene {
   private sparks: Spark[] = [];
   private reviveT0 = -1;
   private reviveKind: 'soul' | 'return' = 'soul';
+  private victory = false;
+  private homeT0 = -1;
+  private onHome: (() => void) | null = null;
   private onRevived: (() => void) | null = null;
   private pale = new Map<FrameName, HTMLCanvasElement>();
   private lastT = 0;
@@ -120,6 +130,27 @@ export class CampScene {
     this.onRevived = onDone;
     this.onCue = onCue ?? null;
     this.cued.clear();
+  }
+
+  /** After a crossing: the room is dark, no fire, just the dwarf cheering in his own torchlight. */
+  celebrate(): void {
+    this.victory = true;
+    this.homeT0 = -1;
+  }
+
+  /** He walks on for a while, the floor rolling by, until the fire comes into view ahead. */
+  homeward(onDone: () => void): void {
+    if (!this.victory) { onDone(); return; }
+    if (this.reduced) { onDone(); return; }
+    this.homeT0 = performance.now();
+    this.onHome = onDone;
+  }
+
+  /** Back to the ordinary camp (done under a fade, so the cut can't be seen). */
+  settle(): void {
+    this.victory = false;
+    this.homeT0 = -1;
+    this.onHome = null;
   }
 
   /** The dwarf without his soul: a dim, grey-green husk with black hollows for eyes. */
@@ -242,8 +273,21 @@ export class CampScene {
     const bodyShown = !reviving || q >= (homecoming ? 0.46 : 0.1);
     const colour = reviving && homecoming ? ease(span(q, 0.84, 0.97)) : 1;
     const doorOpenRevive = reviving && q >= 0.02 && q < (homecoming ? 0.9 : 0.86);
-    // home from a crossing, still holding the torch that got him through
-    const carrying = reviving && !homecoming && q < 0.84;
+    // after a crossing: cheering in the dark, then the walk home to the fire
+    const homeMs = this.victory && this.homeT0 >= 0 ? Math.min(HOME_MS, now - this.homeT0) : -1;
+    const hp = homeMs < 0 ? -1 : homeMs / HOME_MS;
+    if (hp >= 1 && this.onHome) { const done = this.onHome; this.onHome = null; done(); } // holds this frame until settle()
+    const celebrating = this.victory && hp < 0;
+    const walking = this.victory && homeMs >= 0 && homeMs < WALK_MS;
+    // the fire slides into view ahead of him, as if he walked up to it
+    const sight = this.victory && homeMs >= 0 ? ease(Math.max(0, (homeMs - WALK_MS * 0.7) / (HOME_MS - WALK_MS * 0.7))) : 0;
+    const fireShown = this.victory ? sight : 1;
+    const fire = this.victory ? { x: FIRE_AHEAD.x, y: Math.round(lerp(-12, FIRE_AHEAD.y, sight)) } : FIRE;
+    const fireLight = { x: fire.x, y: fire.y - 12 };
+    // the floor rolls by under his feet while he walks ahead, slowing as the fire appears
+    const roll = this.victory && homeMs >= 0 ? (Math.min(homeMs, WALK_MS) * 0.03 + sight * 18) % T : 0;
+    // home from a crossing (or celebrating one), still holding the torch that got him through
+    const carrying = (reviving && !homecoming && q < 0.84) || this.victory;
 
     // ── the sequence: reach into the fire, light the torch, walk to the door ──
     const entering = p >= 0;
@@ -269,37 +313,51 @@ export class CampScene {
       running = bodyWalk > 0 && bodyWalk < 1;
       facingDoor = false;
     }
+    if (this.victory) {
+      // in the middle of the screen: hopping for joy, then walking on the spot as the floor rolls by
+      hx = VICTORY_SPOT.x;
+      hy = VICTORY_SPOT.y;
+      if (celebrating && !this.reduced) hy -= Math.round(Math.abs(Math.sin(t * 5.5)) * 4);
+      running = walking;
+      facingDoor = true;
+    }
 
     // where the torch is: upright in the hand, dipped into the flames while lighting
     const handX = Math.round(hx) + (facingDoor ? HAND.x : T - 1 - HAND.x);
     const handY = Math.round(hy) + HAND.y;
-    const upright = { x: handX + (facingDoor ? 1 : -1), y: handY - 7 };
+    // held upright in the hand (raised high while he celebrates)
+    const upright = { x: handX + (facingDoor ? 1 : -1), y: handY - (celebrating ? 10 : 7) };
     const inFire = { x: FIRE.x + 5, y: FIRE.y - 17 };
     const tip = { x: Math.round(lerp(upright.x, inFire.x, reach)), y: Math.round(lerp(upright.y, inFire.y, reach)) };
 
     // ── the room, drawn at full brightness; the light pass decides what is seen ──
     c.fillStyle = C.void0;
     c.fillRect(0, 0, CAMP_W, CAMP_H);
-    for (let col = 0; col < 7; col++) {
-      this.tile('wall_top_mid', col * T, 0);
-      this.tile('wall_mid', col * T, T);
-    }
-    const dx = DOOR_C * T - 8;
-    // the open leaf's doorway is see-through: black it out, or the wall shows through
-    const doorOpen = p >= 0.72 || doorOpenRevive;
-    if (doorOpen) this.px('void0', dx + 3, 3, 26, 27);
-    this.tile(doorOpen ? 'doors_leaf_open' : 'doors_leaf_closed', dx, 0);
-    this.tile('doors_frame_left', dx - 16, 0);
-    this.tile('doors_frame_right', dx + 32, 0);
-    for (let r = 2; r < 7; r++) for (let col = 0; col < 7; col++) {
-      const v = hash2(col, r) < 0.65 ? 'floor_1' : (['floor_2', 'floor_3', 'floor_5', 'floor_6'] as const)[Math.floor(hash2(r, col) * 4)]!;
-      this.tile(v, col * T, r * T);
+    const floorTile = (col: number, r: number) =>
+      hash2(col, r) < 0.65 ? 'floor_1' : (['floor_2', 'floor_3', 'floor_5', 'floor_6'] as const)[Math.floor(hash2(r, col) * 4)]!;
+    if (this.victory) {
+      // somewhere in the dark between the dungeon and the camp: only floor, rolling by as he walks
+      const shift = Math.floor((this.victory && homeMs >= 0 ? Math.min(homeMs, WALK_MS) * 0.03 + sight * 18 : 0) / T);
+      for (let r = -1; r < 8; r++) for (let col = 0; col < 7; col++) this.tile(floorTile(col, ((r - shift) % 97 + 97) % 97), col * T, r * T + Math.round(roll));
+    } else {
+      for (let col = 0; col < 7; col++) {
+        this.tile('wall_top_mid', col * T, 0);
+        this.tile('wall_mid', col * T, T);
+      }
+      const dx = DOOR_C * T - 8;
+      // the open leaf's doorway is see-through: black it out, or the wall shows through
+      const doorOpen = p >= 0.72 || doorOpenRevive;
+      if (doorOpen) this.px('void0', dx + 3, 3, 26, 27);
+      this.tile(doorOpen ? 'doors_leaf_open' : 'doors_leaf_closed', dx, 0);
+      this.tile('doors_frame_left', dx - 16, 0);
+      this.tile('doors_frame_right', dx + 32, 0);
+      for (let r = 2; r < 7; r++) for (let col = 0; col < 7; col++) this.tile(floorTile(col, r), col * T, r * T);
     }
 
     const flick = this.reduced ? 1 : 1 + 0.07 * Math.sin(t * 8.3) + 0.05 * Math.sin(t * 13.9 + 2) + 0.03 * Math.sin(t * 31);
 
     // the dwarf's shadow, thrown away from the fire and swaying with it
-    if (through === 0 && bodyShown) {
+    if (through === 0 && bodyShown && !this.victory) {
       const fx = hx + 8, fy = hy + 27;
       const ax = fx - FIRE_LIGHT.x, ay = fy - FIRE_LIGHT.y;
       const len = Math.hypot(ax, ay) || 1;
@@ -319,7 +377,12 @@ export class CampScene {
 
     // campfire (Idylwild, 4 frames)
     const ff = this.reduced ? 0 : Math.floor(t * 7) % 4;
-    c.drawImage(this.fire, ff * FIRE_W, 0, FIRE_W, FIRE_H, FIRE.x - FIRE_W / 2, FIRE.y - FIRE_H + 6, FIRE_W, FIRE_H);
+    if (fireShown > 0) {
+      c.save();
+      c.globalAlpha = fireShown;
+      c.drawImage(this.fire, ff * FIRE_W, 0, FIRE_W, FIRE_H, fire.x - FIRE_W / 2, fire.y - FIRE_H + 6, FIRE_W, FIRE_H);
+      c.restore();
+    }
 
     // the dwarf: resting, facing the fire; then off to the door with his torch
     const frames = running ? HERO_RUN : HERO_IDLE;
@@ -354,10 +417,10 @@ export class CampScene {
     // ── light: the fire, and the torch once it burns. Everything else is dark ──
     const torchOn = entering && lit && through < 0.9;
     const torchFade = 1 - span(p, 0.86, 0.98);
-    const R = 46 * flick;
+    const R = Math.max(1, 46 * flick * fireShown);
     const lights: Light[] = [];
     if (torchOn) lights.push({ x: tip.x, y: tip.y, r: 30 * flick * torchFade, k: 1.1, tint: TORCH_TINT });
-    if (carrying) lights.push({ x: upright.x, y: upright.y, r: 30 * flick * (1 - span(q, 0.72, 0.84)), k: 1.1, tint: TORCH_TINT });
+    if (carrying) lights.push({ x: upright.x, y: upright.y, r: 30 * flick * (this.victory ? 1 : 1 - span(q, 0.72, 0.84)), k: 1.1, tint: TORCH_TINT });
     if (soulAlpha > 0) lights.push({ x: soul.x + 8, y: soul.y + 12, r: 24, k: 1.0 * soulAlpha, tint: COLD });
     // just enough to make out the husk in the dark: dull, colourless, unlike the soul's glow
     if (reviving && bodyShown && colour < 1) lights.push({ x: hx + 8, y: hy + 16, r: 15, k: 0.6 * (1 - colour), tint: [0.62, 0.66, 0.6] });
@@ -368,7 +431,7 @@ export class CampScene {
     const d = img.data;
     for (let y = 0; y < CAMP_H; y++) {
       for (let x = 0; x < CAMP_W; x++) {
-        const ddx = x - FIRE_LIGHT.x, ddy = (y - FIRE_LIGHT.y) * 1.2;
+        const ddx = x - fireLight.x, ddy = (y - fireLight.y) * 1.2;
         // the edge of the dark breathes: its radius wanders with the angle and the time
         const ang = Math.atan2(ddy, ddx);
         const wobble = 1 + breathe * (0.07 * Math.sin(3 * ang + t * 0.8) + 0.05 * Math.sin(5 * ang - t * 1.3) + 0.03 * Math.sin(9 * ang + t * 2.3));
@@ -424,11 +487,22 @@ export class CampScene {
       s.x += s.vx * dt; s.y += s.vy * dt; s.vy += 60 * dt;
       this.px(s.life > 0.25 ? 'warm6' : 'warm4', s.x, s.y);
     }
-    if (!this.reduced) {
+    // a crossing: golden sparks burst up and drift around the celebrating dwarf
+    if (celebrating && !this.reduced) {
+      for (let k = 0; k < 12; k++) {
+        const sq = (t * 0.8 + hash2(k, 21)) % 1;
+        if (sq > 0.85) continue;
+        const ang = hash2(k, 5) * Math.PI * 2;
+        const r = 4 + sq * 13;
+        this.px(sq < 0.3 ? 'warm6' : sq < 0.6 ? 'warm5' : 'warm4',
+          Math.round(hx + 8 + Math.cos(ang) * r), Math.round(hy + 12 + Math.sin(ang) * r * 0.6 - sq * 10));
+      }
+    }
+    if (!this.reduced && fireShown > 0.5) {
       for (let k = 0; k < 7; k++) {
         const q = (t * 0.4 + hash2(k, 3)) % 1;
-        const ex = Math.round(FIRE.x + (hash2(k, 9) - 0.5) * 10 + Math.sin(t * 2 + k) * 3);
-        const ey = Math.round(FIRE.y - 14 - q * 34);
+        const ex = Math.round(fire.x + (hash2(k, 9) - 0.5) * 10 + Math.sin(t * 2 + k) * 3);
+        const ey = Math.round(fire.y - 14 - q * 34);
         if (q < 0.8) this.px(q < 0.4 ? 'warm5' : 'warm3', ex, ey);
       }
     }
