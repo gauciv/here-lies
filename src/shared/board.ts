@@ -79,9 +79,9 @@ const WEEK: readonly Difficulty[] = [
 
 export const difficultyOf = (day: number): Difficulty => WEEK[new Date(dayStartUtc(day)).getUTCDay()] ?? WEEK[1]!;
 
-const placePits = (rand: () => number, count: number): boolean[] => {
+const placePits = (rand: () => number, count: number, door: Cell): boolean[] => {
   const pits = new Array<boolean>(COLS * ROWS).fill(false);
-  const safe = new Set<number>([idx(START.c, START.r)]);
+  const safe = new Set<number>([idx(START.c, START.r), idx(door.c, door.r)]);
   for (const n of neighbors(START.c, START.r)) safe.add(idx(n.c, n.r));
   let placed = 0;
   while (placed < count) {
@@ -108,7 +108,9 @@ export const generateBoard = (day: number): Board => {
   for (let attempt = 0; attempt < 6000; attempt++) {
     const rand = mulberry32(hashInts(0x4e1e, day, attempt));
     const count = diff.pits[0] + Math.floor(rand() * (diff.pits[1] - diff.pits[0] + 1));
-    const board: Board = { day, cols: COLS, rows: ROWS, pits: placePits(rand, count), start: START };
+    // the door moves along the far wall from day to day
+    const door: Cell = { c: Math.floor(rand() * COLS), r: 0 };
+    const board: Board = { day, cols: COLS, rows: ROWS, pits: placePits(rand, count, door), start: START, door };
     const result = solve(board);
     if (!result.solved) continue;
     if (result.comparisons >= diff.comparisons[0] && result.comparisons <= diff.comparisons[1]) {
@@ -144,7 +146,7 @@ export const judgeRun = (board: Board, path: Cell[]): RunOutcome => {
     if (board.pits[idx(p.c, p.r)]) {
       return last ? { kind: 'fell', steps: i + 1, at: p } : { kind: 'invalid', reason: 'walked through a pit' };
     }
-    if (p.r === 0) {
+    if (p.c === board.door.c && p.r === board.door.r) {
       return last ? { kind: 'crossed', steps: i + 1 } : { kind: 'invalid', reason: 'kept walking after crossing' };
     }
     prev = p;

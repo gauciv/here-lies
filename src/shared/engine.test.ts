@@ -26,14 +26,14 @@ const pathTo = (target: (c: Cell) => boolean): Cell[] => {
         for (let at = ni; at !== s; at = prev.get(at)!) path.unshift({ c: at % COLS, r: Math.floor(at / COLS) });
         return path;
       }
-      if (!board.pits[ni] && n.r !== 0) q.push(ni);
+      if (!board.pits[ni]) q.push(ni);
     }
   }
   throw new Error('no path');
 };
 
 const pitPath = pathTo((c) => board.pits[idx(c.c, c.r)] === true);
-const crossPath = pathTo((c) => c.r === 0 && !board.pits[idx(c.c, c.r)]);
+const crossPath = pathTo((c) => c.c === board.door.c && c.r === board.door.r);
 const arrowFor = (stone: number): number => validDirections(cellOf(stone))[0]!;
 
 void test('fall → carve → cross loop', async () => {

@@ -12,6 +12,8 @@ export type Board = {
   /** pits[idx(c, r)] === true when the stone at (c, r) hides a pit */
   pits: boolean[];
   start: Cell;
+  /** the exit: a stone in the far row, in front of the door (column varies by day) */
+  door: Cell;
 };
 
 export const START: Cell = { c: 3, r: ROWS - 1 };

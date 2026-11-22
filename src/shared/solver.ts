@@ -45,7 +45,7 @@ export const solve = (board: Board): SolveResult => {
         }
       }
     }
-    for (const v of visited) if (cellOf(v).r === 0) return { solved: true, comparisons, visited: visited.size };
+    if (visited.has(idx(board.door.c, board.door.r))) return { solved: true, comparisons, visited: visited.size };
 
     const constraints: Constraint[] = [];
     for (const v of visited) {

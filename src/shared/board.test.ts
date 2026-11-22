@@ -24,12 +24,20 @@ void test('every board for a year is winnable with a safe start', () => {
     const b = generateBoard(day);
     assert.equal(b.pits.length, COLS * ROWS);
     assert.ok(shortestCrossing(b.pits) > 0, `day ${day} unwinnable`);
+    assert.equal(b.door.r, 0);
+    assert.equal(b.pits[idx(b.door.c, b.door.r)], false, `day ${day} door is a pit`);
     assert.equal(b.pits[idx(START.c, START.r)], false);
     for (const n of neighbors(START.c, START.r)) assert.equal(b.pits[idx(n.c, n.r)], false);
     const count = b.pits.filter(Boolean).length;
     const diff = difficultyOf(day);
     assert.ok(count >= diff.pits[0] && count <= diff.pits[1], `day ${day} has ${count} pits`);
   }
+});
+
+void test('the door moves along the far wall from day to day', () => {
+  const cols = new Set<number>();
+  for (let day = 1; day <= 60; day++) cols.add(generateBoard(day).door.c);
+  assert.ok(cols.size >= 4, `door only ever in columns ${[...cols]}`);
 });
 
 void test('clue counts touching pits', () => {
@@ -55,7 +63,7 @@ const safePath = (day: number): Cell[] => {
       const ni = idx(n.c, n.r);
       if (seen.has(ni) || b.pits[ni]) continue;
       seen.add(ni); prev.set(ni, cur); q.push(ni);
-      if (n.r === 0) { end = ni; break; }
+      if (n.c === b.door.c && n.r === b.door.r) { end = ni; break; }
     }
   }
   const path: Cell[] = [];
