@@ -74,7 +74,15 @@ export const Standby = forwardRef<StandbyHandle, {
       <CampCanvas ref={ref} maxScale={compact ? 3 : 4} />
       <section className="parchment" aria-label="Your record">
         <p className="parch-title">Here Lies</p>
-        {day && (
+        {day && (compact ? (
+          // the feed post stays light: the room, the day, the tier, your streak
+          <>
+            <p className="parch-room">{day.room}</p>
+            <p className="parch-line">
+              Day {day.day} · {dateLabel(day.day)} · <b className={`parch-tier parch-${tier.toLowerCase()}`}>{tier}</b>
+            </p>
+          </>
+        ) : (
           <>
             <p className="parch-line">Day {day.day} · {dateLabel(day.day)}</p>
             <p className="parch-room">{day.room}</p>
@@ -82,20 +90,20 @@ export const Standby = forwardRef<StandbyHandle, {
               <b className={`parch-tier parch-${tier.toLowerCase()}`}>{tier}</b>{diff ? ` · ${diff.hint}` : ''}
             </p>
           </>
-        )}
+        ))}
         {me && (
           <p className="parch-streak">
             {me.streak > 0 ? (
               <><span className="parch-big">{me.streak}</span> day streak{me.bestStreak > me.streak ? ` · best ${me.bestStreak}` : ''}</>
             ) : me.bestStreak > 0 ? (
-              <>Streak broken · best {me.bestStreak}. Cross today to start anew.</>
+              compact ? <>Streak broken · best {me.bestStreak}</> : <>Streak broken · best {me.bestStreak}. Cross today to start anew.</>
             ) : (
-              <>No streak yet. Cross today to begin one.</>
+              compact ? <>{status(me)}</> : <>No streak yet. Cross today to begin one.</>
             )}
           </p>
         )}
-        {day && <p className="parch-line">Today {day.fallen} fell · {day.crossed} crossed</p>}
-        {me && <p className="parch-status">{status(me)}</p>}
+        {!compact && day && <p className="parch-line">Today {day.fallen} fell · {day.crossed} crossed</p>}
+        {!compact && me && <p className="parch-status">{status(me)}</p>}
         <div className="parch-actions">
           {finished ? (
             <>
