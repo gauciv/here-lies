@@ -127,16 +127,12 @@ export const App = () => {
               me={s.me} onShare={share} onJoin={join} onFlair={flair}
               onContinue={() => {
                 setContinuing(true);
-                // walk on until the fire is in sight, then fade into the ordinary camp
+                // walk on, the camp comes into view, he takes his place: the camp simply carries on
                 standby.current?.homeward(() => {
-                  setFade(true);
-                  window.setTimeout(() => {
-                    standby.current?.settle();
-                    setVictoryView(false);
-                    setContinuing(false);
-                    closeCard();
-                    window.setTimeout(() => setFade(false), 150);
-                  }, 450);
+                  standby.current?.settle();
+                  setVictoryView(false);
+                  setContinuing(false);
+                  closeCard();
                 });
               }}
             />

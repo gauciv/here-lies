@@ -28,12 +28,16 @@ const REVIVE_MS = 7200;
 /** back from a crossing: he just walks in from the door to the fire */
 const RETURN_MS = 3000;
 /** after a crossing: where the dwarf celebrates in the dark, and how long the walk to the fire takes */
-const VICTORY_SPOT = { x: 48, y: 44 };
-/** Continue: two seconds of walking ahead (the floor rolls by), then the fire comes into view */
+const VICTORY_SPOT = { x: 48, y: 32 };
+/**
+ * Continue: two seconds of walking on (the floor rolls by and slows to a stop),
+ * then the camp's walls and fire come into view around him, then he walks to his place.
+ */
 const WALK_MS = 2000;
-const HOME_MS = 2900;
-/** where the fire settles, ahead of him, when he finally sees it */
-const FIRE_AHEAD = { x: 56, y: 34 };
+const REVEAL_MS = 2900;
+const HOME_MS = 4000;
+/** how far the floor rolls in the walk: whole rows, ending exactly on the camp's own floor */
+const ROLL_PX = 5 * T;
 /** where the soul hovers beside the fire, waiting for its body */
 const SOUL_REST = { x: 67, y: 40 };
 /** the dwarf sprite's hand, facing right */
@@ -275,17 +279,20 @@ export class CampScene {
     const doorOpenRevive = reviving && q >= 0.02 && q < (homecoming ? 0.9 : 0.86);
     // after a crossing: cheering in the dark, then the walk home to the fire
     const homeMs = this.victory && this.homeT0 >= 0 ? Math.min(HOME_MS, now - this.homeT0) : -1;
-    const hp = homeMs < 0 ? -1 : homeMs / HOME_MS;
-    if (hp >= 1 && this.onHome) { const done = this.onHome; this.onHome = null; done(); } // holds this frame until settle()
-    const celebrating = this.victory && hp < 0;
-    const walking = this.victory && homeMs >= 0 && homeMs < WALK_MS;
-    // the fire slides into view ahead of him, as if he walked up to it
-    const sight = this.victory && homeMs >= 0 ? ease(Math.max(0, (homeMs - WALK_MS * 0.7) / (HOME_MS - WALK_MS * 0.7))) : 0;
-    const fireShown = this.victory ? sight : 1;
-    const fire = this.victory ? { x: FIRE_AHEAD.x, y: Math.round(lerp(-12, FIRE_AHEAD.y, sight)) } : FIRE;
-    const fireLight = { x: fire.x, y: fire.y - 12 };
-    // the floor rolls by under his feet while he walks ahead, slowing as the fire appears
-    const roll = this.victory && homeMs >= 0 ? (Math.min(homeMs, WALK_MS) * 0.03 + sight * 18) % T : 0;
+    if (homeMs >= HOME_MS && this.onHome) { const done = this.onHome; this.onHome = null; done(); } // holds this frame until settle()
+    const celebrating = this.victory && homeMs < 0;
+    const walkK = homeMs < 0 ? 0 : Math.min(1, homeMs / WALK_MS);
+    const walking = this.victory && homeMs >= 0 && walkK < 1;
+    // the camp's walls and fire fade in around him, then he walks to his place by the fire
+    const reveal = this.victory && homeMs >= 0 ? ease((homeMs - WALK_MS) / (REVEAL_MS - WALK_MS)) : 0;
+    const settleK = this.victory && homeMs >= 0 ? ease((homeMs - REVEAL_MS) / (HOME_MS - REVEAL_MS)) : 0;
+    const fireShown = this.victory ? reveal : 1;
+    const fire = FIRE;
+    const fireLight = FIRE_LIGHT;
+    // the floor rolls by under his feet, slowing to a stop exactly on the camp's own floor
+    const rolled = this.victory ? ROLL_PX * (1 - (1 - walkK) * (1 - walkK)) : 0;
+    const shift = Math.floor(rolled / T);
+    const roll = rolled - shift * T;
     // home from a crossing (or celebrating one), still holding the torch that got him through
     const carrying = (reviving && !homecoming && q < 0.84) || this.victory;
 
@@ -314,12 +321,13 @@ export class CampScene {
       facingDoor = false;
     }
     if (this.victory) {
-      // in the middle of the screen: hopping for joy, then walking on the spot as the floor rolls by
-      hx = VICTORY_SPOT.x;
-      hy = VICTORY_SPOT.y;
+      // in the middle of the screen: hopping for joy, walking on the spot as the floor rolls by,
+      // then over to his place by the fire, turning to face it as he arrives
+      hx = lerp(VICTORY_SPOT.x, HERO_REST.x, settleK);
+      hy = lerp(VICTORY_SPOT.y, HERO_REST.y, settleK);
       if (celebrating && !this.reduced) hy -= Math.round(Math.abs(Math.sin(t * 5.5)) * 4);
-      running = walking;
-      facingDoor = true;
+      running = walking || (settleK > 0 && settleK < 1);
+      facingDoor = settleK < 1;
     }
 
     // where the torch is: upright in the hand, dipped into the flames while lighting
@@ -336,9 +344,25 @@ export class CampScene {
     const floorTile = (col: number, r: number) =>
       hash2(col, r) < 0.65 ? 'floor_1' : (['floor_2', 'floor_3', 'floor_5', 'floor_6'] as const)[Math.floor(hash2(r, col) * 4)]!;
     if (this.victory) {
-      // somewhere in the dark between the dungeon and the camp: only floor, rolling by as he walks
-      const shift = Math.floor((this.victory && homeMs >= 0 ? Math.min(homeMs, WALK_MS) * 0.03 + sight * 18 : 0) / T);
-      for (let r = -1; r < 8; r++) for (let col = 0; col < 7; col++) this.tile(floorTile(col, ((r - shift) % 97 + 97) % 97), col * T, r * T + Math.round(roll));
+      // somewhere in the dark between the dungeon and the camp: only floor, rolling by as he walks.
+      // The rows cycle through the camp's own five, so when it stops it IS the camp floor.
+      const pattern = (r: number) => 2 + ((((r - 2 - shift) % 5) + 5) % 5);
+      for (let r = -1; r < 8; r++) for (let col = 0; col < 7; col++) this.tile(floorTile(col, pattern(r)), col * T, r * T + Math.round(roll));
+      if (reveal > 0) {
+        // the camp's back wall and door come into view around him
+        c.save();
+        c.globalAlpha = reveal;
+        this.px('void0', 0, 0, CAMP_W, 2 * T); // as in the camp, the wall tops sit on black
+        for (let col = 0; col < 7; col++) {
+          this.tile('wall_top_mid', col * T, 0);
+          this.tile('wall_mid', col * T, T);
+        }
+        const dx = DOOR_C * T - 8;
+        this.tile('doors_leaf_closed', dx, 0);
+        this.tile('doors_frame_left', dx - 16, 0);
+        this.tile('doors_frame_right', dx + 32, 0);
+        c.restore();
+      }
     } else {
       for (let col = 0; col < 7; col++) {
         this.tile('wall_top_mid', col * T, 0);
@@ -420,7 +444,11 @@ export class CampScene {
     const R = Math.max(1, 46 * flick * fireShown);
     const lights: Light[] = [];
     if (torchOn) lights.push({ x: tip.x, y: tip.y, r: 30 * flick * torchFade, k: 1.1, tint: TORCH_TINT });
-    if (carrying) lights.push({ x: upright.x, y: upright.y, r: 30 * flick * (this.victory ? 1 : 1 - span(q, 0.72, 0.84)), k: 1.1, tint: TORCH_TINT });
+    if (carrying && this.victory) {
+      // after a crossing his torch is the whole world: a wide circle centred on him
+      const out = 1 - Math.max(0, Math.min(1, (homeMs - (HOME_MS - 450)) / 450));
+      lights.push({ x: hx + 8, y: hy + 15, r: 50 * flick * out, k: 1.15, tint: TORCH_TINT });
+    } else if (carrying) lights.push({ x: upright.x, y: upright.y, r: 30 * flick * (1 - span(q, 0.72, 0.84)), k: 1.1, tint: TORCH_TINT });
     if (soulAlpha > 0) lights.push({ x: soul.x + 8, y: soul.y + 12, r: 24, k: 1.0 * soulAlpha, tint: COLD });
     // just enough to make out the husk in the dark: dull, colourless, unlike the soul's glow
     if (reviving && bodyShown && colour < 1) lights.push({ x: hx + 8, y: hy + 16, r: 15, k: 0.6 * (1 - colour), tint: [0.62, 0.66, 0.6] });
@@ -476,7 +504,7 @@ export class CampScene {
       }
     }
     if (torchOn && through < 0.6) this.drawFlame(tip.x, tip.y, t);
-    if (carrying && q < 0.8) this.drawFlame(upright.x, upright.y, t);
+    if (carrying && q < 0.8 && (!this.victory || homeMs < HOME_MS - 200)) this.drawFlame(upright.x, upright.y, t);
     if (entering && p >= 0.3 && p < 0.33 && this.sparks.length < 14) {
       for (let k = 0; k < 4; k++) {
         this.sparks.push({ x: tip.x, y: tip.y, vx: (hash2(k, Math.floor(now)) - 0.5) * 50, vy: -20 - hash2(Math.floor(now), k) * 40, life: 0.5 });
