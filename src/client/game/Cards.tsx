@@ -16,6 +16,16 @@ const subredditName = (): string | null => {
 
 type Social = { onShare: () => Promise<boolean>; onJoin: () => Promise<boolean> };
 
+/** Explicit opt-in: wear today's pioneer title as subreddit flair. */
+const FlairButton = ({ title, onFlair }: { title: string; onFlair: () => Promise<boolean> }) => {
+  const [state, setState] = useState<'idle' | 'busy' | 'done'>('idle');
+  return (
+    <button className="btn btn-flair" disabled={state !== 'idle'} onClick={async () => { setState('busy'); setState((await onFlair()) ? 'done' : 'idle'); }}>
+      {state === 'done' ? `Wearing “${title}”` : state === 'busy' ? 'Setting flair…' : `Wear “${title}” as flair`}
+    </button>
+  );
+};
+
 /** Optional, explicit actions: preview the comment, post it; separately, join. */
 const ShareBlock = ({ me, day, onShare, onJoin }: { me: MeDto; day: DayDto } & Social) => {
   const [busy, setBusy] = useState<'share' | 'join' | null>(null);
@@ -156,7 +166,7 @@ export const CarveCard = ({ me, step, onCarve }: { me: MeDto; step: number | nul
   );
 };
 
-export const CrossedCard = ({ me, day, onClose, onShare, onJoin }: { me: MeDto; day: DayDto; onClose: () => void } & Social) => {
+export const CrossedCard = ({ me, day, onClose, onShare, onJoin, onFlair }: { me: MeDto; day: DayDto; onClose: () => void; onFlair: () => Promise<boolean> } & Social) => {
   const countdown = useCountdown(day.day);
   return (
     <section className="card card-win" aria-label="You crossed">
@@ -169,6 +179,7 @@ export const CrossedCard = ({ me, day, onClose, onShare, onJoin }: { me: MeDto; 
           <span className="card-meta">
             {me.pioneer}% of the pits were still unmapped when you crossed{me.rank ? `, ${ordinal(me.rank)} across today` : ''}.
           </span>
+          <FlairButton title={pioneerTitle(me.pioneer)} onFlair={onFlair} />
         </p>
       )}
       <dl className="stats">

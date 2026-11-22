@@ -67,4 +67,5 @@ export const localApi: GameApi = {
       .then((text) => { console.info('[local preview] would comment:\n' + text); return engine.confirmShare(d, ME, true); })
       .then((me) => ({ type: 'share' as const, me })),
   join: () => wait(Promise.resolve()).then(() => ({ type: 'join' as const })),
+  flair: (d) => wait(Promise.resolve()).then(() => engine.flairFor(d, ME)).then((f) => ({ type: 'flair' as const, text: f.text })),
 };

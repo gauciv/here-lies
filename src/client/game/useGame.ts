@@ -241,6 +241,19 @@ export const useGame = () => {
     }
   }, [toast]);
 
+  const flair = useCallback(async (): Promise<boolean> => {
+    const api = apiRef.current;
+    const day = s.day;
+    if (!api || !day) return false;
+    try {
+      await api.flair(day.day);
+      return true;
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not set your flair.');
+      return false;
+    }
+  }, [s.day, toast]);
+
   const closeCard = useCallback(() => {
     setS((p) => (p.card.kind === 'carve' ? p : { ...p, card: { kind: 'none' } }));
   }, []);
@@ -258,5 +271,5 @@ export const useGame = () => {
     return 'Reach the far wall.';
   }, [s.status, s.phase, s.revealed.size, s.walkedThisRun, s.graves.size]);
 
-  return { s, tap, onFallDone, onCrossDone, carve, vote, share, join, closeCard, openGrave, hint };
+  return { s, tap, onFallDone, onCrossDone, carve, vote, share, join, flair, closeCard, openGrave, hint };
 };

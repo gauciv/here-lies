@@ -6,6 +6,7 @@ import type {
   FallResponse,
   GraveResponse,
   JoinResponse,
+  FlairResponse,
   ShareResponse,
   InitResponse,
   Vote,
@@ -21,4 +22,5 @@ export type GameApi = {
   grave: (day: number, i: number) => Promise<GraveResponse>;
   share: (day: number) => Promise<ShareResponse>;
   join: () => Promise<JoinResponse>;
+  flair: (day: number) => Promise<FlairResponse>;
 };

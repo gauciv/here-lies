@@ -24,4 +24,5 @@ export const httpApi: GameApi = {
   grave: (day, i) => call(`grave?day=${day}&i=${i}`),
   share: (day) => call('share', { day }),
   join: () => call('join', {}),
+  flair: (day) => call('flair', { day }),
 };
