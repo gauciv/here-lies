@@ -10,7 +10,9 @@ Built for Reddit's Game of the Day Hackathon on Devvit Web.
 
 ## The camp
 
-Every visit starts in a small resting room: the adventurer sits by a campfire, and a parchment scroll keeps your record: your crossing streak (and best), the day and its difficulty, how many fell and crossed today, and where you stand. **Enter the dungeon** walks you through the door into the dark. Once you've finished the day's room, **Review the room** lets you look back at it with every pit and every arrow's truth revealed. The camp has its own calm music; the dungeon's is tense.
+Every visit starts in the dark. A dwarf rests by a campfire, the only light there is, and the shadows at the edge of its glow shift as the flames move. The game's name hangs above in old blackletter, and nothing else is on screen.
+
+**Enter the dungeon** sets him moving: he takes up an unlit torch, lights it in the fire and carries it into the dark. A door appears only when his torch reaches it, and he steps through into the day's room. **Your record** unrolls a parchment with the day, the room's name and tier, your streak and best, today's tally, and where you stand. **Hide** rolls it away again. Once you've finished the day's room, **Review the room** lets you look back at it with every pit and every arrow's truth revealed. The camp has its own calm music; the dungeon's is tense.
 
 ## How to play
 

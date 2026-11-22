@@ -14,3 +14,4 @@
 ## Fonts
 
 - **Pixelify Sans** by Stefie Justprince, via Fontsource. License: [SIL Open Font License 1.1](https://openfontlicense.org).
+- **Jacquard 24** by Sarah Cadigan-Fried, via Fontsource: the title. License: [SIL Open Font License 1.1](https://openfontlicense.org).
