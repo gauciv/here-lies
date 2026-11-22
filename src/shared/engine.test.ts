@@ -112,8 +112,12 @@ void test('sharing: only after the run, once, and a failed post can be retried',
 void test('pioneer score rewards crossing before others map the pits', async () => {
   const e = new Engine(new MemoryStore());
   await e.init(DAY, 'early', 't3_x'); // seeds forgotten graves, which never count
+  await assert.rejects(e.flairFor(DAY, 'early'), /Cross/);
   const first = await e.cross(DAY, 'early', crossPath);
   assert.equal(first.me.pioneer, 100);
+  const flair = await e.flairFor(DAY, 'early');
+  assert.match(flair.text, /^Trailblazer · /);
+  assert.ok(!flair.text.includes(','));
   // someone else falls into an unmarked pit: later crossers score lower
   const f = await e.fall(DAY, 'faller', pitPath);
   await e.carve(DAY, 'faller', f.grave.i, 0);

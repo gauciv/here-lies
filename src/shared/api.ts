@@ -69,5 +69,6 @@ export type GraveResponse = { type: 'grave'; grave: GraveDto; epitaphs: EpitaphD
 
 export type ShareResponse = { type: 'share'; me: MeDto };
 export type JoinResponse = { type: 'join' };
+export type FlairResponse = { type: 'flair'; text: string };
 
 export type ErrorResponse = { status: 'error'; message: string };

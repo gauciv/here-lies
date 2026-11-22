@@ -3,7 +3,7 @@
 import { CANDLES_PER_DAY, ROWS, cellOf, dayNumber, generateBoard, idx, judgeRun, mulberry32, neighbors, type Cell } from './board';
 import { EPITAPHS, FORGOTTEN, isEpitaphId } from './epitaphs';
 import { canShare, shareText } from './share';
-import { pioneerScore } from './pioneer';
+import { pioneerFlair, pioneerScore, type Flair } from './pioneer';
 import type {
   CarveResponse,
   CrossResponse,
@@ -314,6 +314,13 @@ export class Engine {
     const [epitaph, grave] = await Promise.all([this.epitaph(day, id, user), this.grave(day, i, user)]);
     if (!epitaph) throw new GameError('No such epitaph');
     return { type: 'vote', epitaph, grave };
+  }
+
+  /** The flair a player has earned today (only after crossing). */
+  async flairFor(day: number, user: string): Promise<Flair> {
+    const me = await this.me(day, user);
+    if (!me.crossed || me.pioneer === null) throw new GameError('Cross the dark to earn a title');
+    return pioneerFlair(day, me.pioneer);
   }
 
   /** Claim today's single share; returns the comment text to post. */
