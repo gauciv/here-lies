@@ -1,6 +1,6 @@
 // The comment a player can choose to post. Built from game state only (never
 // free text) and spoiler-free: no path, no pit positions.
-import { CANDLES_PER_DAY, difficultyOf } from './board';
+import { CANDLES_PER_DAY, difficultyOf, generateBoard } from './board';
 import type { MeDto } from './api';
 import { pioneerTitle } from './pioneer';
 
@@ -12,7 +12,7 @@ const ordinal = (n: number): string => {
 
 /** Plain text and standard punctuation only: it must render in any Reddit font. */
 export const shareText = (day: number, me: MeDto): string => {
-  const head = `**Here Lies** · Day ${day} · ${difficultyOf(day).name}`;
+  const head = `**Here Lies** · Day ${day} · ${generateBoard(day).name} · ${difficultyOf(day).name}`;
   const arrow = me.myArrow
     ? me.myArrow.truthful
       ? ` My arrow told the truth${me.myArrow.saved ? ` and saved ${me.myArrow.saved}` : ''}.`

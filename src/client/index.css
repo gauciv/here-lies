@@ -340,8 +340,8 @@ body {
 .parch-tier { font-weight: 600; }
 .parch-gentle { color: #3f5f2a; }
 .parch-tricky { color: #8a5a10; }
-.parch-cruel { color: #9a4a12; }
-.parch-brutal { color: #8a1f1a; }
+.parch-cruel { color: #8a1f1a; }
+.parch-room { margin: 0; font-size: 17px; font-weight: 600; color: #4a3020; }
 .parch-streak { margin: 2px 0; font-size: 15px; color: #3b2a1a; }
 .parch-big { font-size: 30px; font-weight: 600; color: #7a2c12; vertical-align: -3px; margin-right: 4px; }
 .parch-status { margin: 0; font-size: 13px; color: #5a4128; font-style: italic; }

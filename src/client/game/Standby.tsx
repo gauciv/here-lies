@@ -67,16 +67,21 @@ export const Standby = forwardRef<StandbyHandle, {
 }>(({ day, me, busy, onEnter, onReview, compact = false }, ref) => {
   const countdown = useCountdown(day?.day ?? 1);
   const finished = !!me && (me.crossed || me.candles <= 0) && me.uncarved === null;
-  const tier = day ? difficultyOf(day.day).name : '';
+  const diff = day ? difficultyOf(day.day) : null;
+  const tier = diff?.name ?? '';
   return (
     <div className={`standby${compact ? ' standby-compact' : ''}`}>
       <CampCanvas ref={ref} maxScale={compact ? 3 : 4} />
       <section className="parchment" aria-label="Your record">
         <p className="parch-title">Here Lies</p>
         {day && (
-          <p className="parch-line">
-            Day {day.day} · {dateLabel(day.day)} · <b className={`parch-tier parch-${tier.toLowerCase()}`}>{tier}</b>
-          </p>
+          <>
+            <p className="parch-line">Day {day.day} · {dateLabel(day.day)}</p>
+            <p className="parch-room">{day.room}</p>
+            <p className="parch-line">
+              <b className={`parch-tier parch-${tier.toLowerCase()}`}>{tier}</b>{diff ? ` · ${diff.hint}` : ''}
+            </p>
+          </>
         )}
         {me && (
           <p className="parch-streak">

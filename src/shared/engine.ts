@@ -83,7 +83,7 @@ export class Engine {
 
   private async dayDto(day: number): Promise<DayDto> {
     const s = await this.store.hGetAll(K.stats(day));
-    return { day, fallen: num(s.fallen), crossed: num(s.crossed) };
+    return { day, room: generateBoard(day).name, fallen: num(s.fallen), crossed: num(s.crossed) };
   }
 
   private async myArrow(day: number, epId: string | undefined): Promise<MyArrowDto | null> {

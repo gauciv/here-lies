@@ -28,6 +28,8 @@ export type GraveDto = {
 
 export type DayDto = {
   day: number;
+  /** today's room, e.g. "The Drowned Gallery" */
+  room: string;
   fallen: number;
   crossed: number;
 };
