@@ -3,6 +3,7 @@
 // look cohesive and "hand-pixelled" instead of a smooth gradient.
 
 export const C = {
+  ink: '#222222', // outline colour shared with the 0x72 tileset
   void0: '#06070b',
   void1: '#0c0f16',
   void2: '#141922',
@@ -23,7 +24,7 @@ export const C = {
   warm4: '#e19a43',
   warm5: '#ffd27a',
   warm6: '#fff1c2',
-  // stone under lantern light
+  // stone under torchlight
   lit1: '#3a3731',
   lit2: '#564e3e',
   lit3: '#786a4f',

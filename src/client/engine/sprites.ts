@@ -1,4 +1,5 @@
-// Hand-authored pixel sprites. Each character maps to a palette key; '.' is empty.
+// Hand-authored pixel sprites (only what the CC0 tileset doesn't provide).
+// Each character maps to a palette key; '.' is empty.
 import { C, type ColorKey } from './palette';
 
 export type Sprite = { w: number; h: number; canvas: HTMLCanvasElement };
@@ -24,37 +25,22 @@ const build = (rows: readonly string[], legend: Legend): Sprite => {
   return { w, h, canvas };
 };
 
-// ── wanderer: hooded figure, lantern carried at its right hand ──────────────
-const WANDERER_ROWS = [
-  '..aaa..',
-  '.abbba.',
-  '.bcccb.',
-  '.abcba.',
-  'aabbbaa',
-  'abbbbba',
-  'abbbbbd',
-  'abbbbba',
-  '.abbba.',
-  '.e...e.',
-] as const;
-const WANDERER_LEGEND: Legend = { a: 'red0', b: 'red1', c: 'void0', d: 'bone1', e: 'void1' };
-
-// ── grave stone ─────────────────────────────────────────────────────────────
+// ── grave stone, outlined to sit with the tileset's chunky style ────────────
 const STONE_ROWS = [
-  '..ooooo..',
-  '.oSSSSSo.',
-  'oSSSkSSSo',
-  'oSSkkkSSo',
-  'oSSSkSSSo',
-  'oSSSkSSSo',
-  'oSSSSSSSo',
-  'oSSSSSSSo',
-  'oSSSSSSSo',
-  'goooooooo',
-  '.ggggggg.',
+  '...oooo...',
+  '..oSSSSo..',
+  '.oSSSSSSo.',
+  '.oSSSkSSo.',
+  '.oSSkkkSo.',
+  '.oSSSkSSo.',
+  '.oSSSkSSo.',
+  '.oSSSSSSo.',
+  '.oSSSSShho',
+  '.ohhhhhhho',
+  'oooooooooo',
 ] as const;
-const STONE_LEGEND: Legend = { o: 'stone4', S: 'stone7', k: 'stone3', g: 'void1' };
-const STONE_MINE_LEGEND: Legend = { o: 'stone5', S: 'bone2', k: 'stone4', g: 'void1' };
+const STONE_LEGEND: Legend = { o: 'ink', S: 'stone8', h: 'stone6', k: 'stone5' };
+const STONE_MINE_LEGEND: Legend = { o: 'ink', S: 'bone2', h: 'bone1', k: 'lit3' };
 
 // ── 3x5 digits ──────────────────────────────────────────────────────────────
 const DIGITS: Record<number, readonly string[]> = {
@@ -69,7 +55,6 @@ const DIGITS: Record<number, readonly string[]> = {
 };
 
 export type Sprites = {
-  wanderer: Sprite;
   stone: Sprite;
   stoneMine: Sprite;
   digit: (n: number, color: ColorKey) => Sprite;
@@ -81,7 +66,6 @@ export const getSprites = (): Sprites => {
   if (sprites) return sprites;
   const digitCache = new Map<string, Sprite>();
   sprites = {
-    wanderer: build(WANDERER_ROWS, WANDERER_LEGEND),
     stone: build(STONE_ROWS, STONE_LEGEND),
     stoneMine: build(STONE_ROWS, STONE_MINE_LEGEND),
     digit: (n, color) => {
