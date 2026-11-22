@@ -42,6 +42,8 @@ export type MeDto = {
   streak: number;
   /** already posted today's result as a comment */
   shared: boolean;
+  /** % of pits still unmapped by others when you crossed (null until crossed) */
+  pioneer: number | null;
 };
 
 export type InitResponse = {

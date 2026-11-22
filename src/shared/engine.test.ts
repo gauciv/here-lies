@@ -109,6 +109,23 @@ void test('sharing: only after the run, once, and a failed post can be retried',
   await assert.rejects(e.claimShare(DAY, 'sam'), /already/);
 });
 
+void test('pioneer score rewards crossing before others map the pits', async () => {
+  const e = new Engine(new MemoryStore());
+  await e.init(DAY, 'early', 't3_x'); // seeds forgotten graves, which never count
+  const first = await e.cross(DAY, 'early', crossPath);
+  assert.equal(first.me.pioneer, 100);
+  // someone else falls into an unmarked pit: later crossers score lower
+  const f = await e.fall(DAY, 'faller', pitPath);
+  await e.carve(DAY, 'faller', f.grave.i, 0);
+  const late = await e.cross(DAY, 'late', crossPath);
+  assert.ok(late.me.pioneer !== null && late.me.pioneer < 100);
+  // your own falls never count against you
+  const g = await e.fall(DAY, 'solo', pitPath);
+  await e.carve(DAY, 'solo', g.grave.i, 0);
+  const solo = await e.cross(DAY, 'solo', crossPath);
+  assert.equal(solo.me.pioneer, late.me.pioneer);
+});
+
 void test('rejects forged runs', async () => {
   const e = new Engine(new MemoryStore());
   await assert.rejects(e.cross(DAY, 'dave', [{ c: 3, r: 0 }]), GameError);

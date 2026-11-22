@@ -3,6 +3,7 @@
 import { CANDLES_PER_DAY, ROWS, cellOf, dayNumber, generateBoard, idx, judgeRun, mulberry32, neighbors, type Cell } from './board';
 import { EPITAPHS, FORGOTTEN, isEpitaphId } from './epitaphs';
 import { canShare, shareText } from './share';
+import { pioneerScore } from './pioneer';
 import type {
   CarveResponse,
   CrossResponse,
@@ -44,6 +45,7 @@ const K = {
   user: (d: number, u: string) => `d:${d}:u:${u}`,
   votes: (d: number, u: string) => `d:${d}:votes:${u}`,
   streak: (u: string) => `u:${u}:streak`,
+  seededCells: (d: number) => `d:${d}:seeded`,
 };
 
 const num = (v: string | undefined, fallback = 0): number => {
@@ -98,6 +100,7 @@ export class Engine {
       uncarved: u.uncarved ? num(u.uncarved) : null,
       streak: last >= day - 1 ? num(st.count) : 0,
       shared: u.shared === '1',
+      pioneer: u.pioneer ? num(u.pioneer) : null,
     };
   }
 
@@ -169,6 +172,7 @@ export class Engine {
       });
       await this.store.zAdd(K.cell(day, i), id, epScore(0, 0) + at / 1e13);
       await this.store.hIncrBy(K.falls(day), String(i), 1);
+      await this.store.hSet(K.seededCells(day), { [String(i)]: '1' });
     }
   }
 
@@ -255,6 +259,24 @@ export class Engine {
     return { type: 'carve', grave, me };
   }
 
+  /** Share of open pits that other real players had not yet marked, right now. */
+  private async pioneerFor(day: number, user: string): Promise<number> {
+    const [falls, seeded, u] = await Promise.all([
+      this.store.hGetAll(K.falls(day)),
+      this.store.hGetAll(K.seededCells(day)),
+      this.store.hGetAll(K.user(day, user)),
+    ]);
+    const mine = parseList(u.fellAt);
+    let marked = 0;
+    for (const [cell, count] of Object.entries(falls)) {
+      const i = Number(cell);
+      const others = num(count) - (seeded[cell] ? 1 : 0) - mine.filter((m) => m === i).length;
+      if (others > 0) marked++;
+    }
+    const pits = generateBoard(day).pits.filter(Boolean).length;
+    return pioneerScore(pits, Object.keys(seeded).length, marked);
+  }
+
   async cross(day: number, user: string, rawPath: unknown): Promise<CrossResponse> {
     const path = parsePath(rawPath);
     await this.assertCanWalk(day, user);
@@ -262,7 +284,8 @@ export class Engine {
     if (outcome.kind !== 'crossed') throw new GameError('That walk did not reach the far wall');
     if (!(await this.store.hSetNX(K.user(day, user), 'crossLock', '1'))) throw new GameError('You already crossed today');
     const rank = await this.store.hIncrBy(K.stats(day), 'crossed', 1);
-    await this.store.hSet(K.user(day, user), { crossed: '1', rank: String(rank), steps: String(outcome.steps) });
+    const pioneer = await this.pioneerFor(day, user);
+    await this.store.hSet(K.user(day, user), { crossed: '1', rank: String(rank), steps: String(outcome.steps), pioneer: String(pioneer) });
     await this.recordPath(day, user, path);
     // streaks only advance on today's crossing, never by replaying an old post
     if (day === dayNumber()) {
