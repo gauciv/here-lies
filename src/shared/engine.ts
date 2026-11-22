@@ -36,20 +36,23 @@ export type Store = {
 
 export class GameError extends Error {}
 
+/** Bump when the stored shape changes, so old days don't mix with new rules. */
+const NS = 'v2:';
+
 const K = {
-  stats: (d: number) => `d:${d}:stats`,
+  stats: (d: number) => `${NS}d:${d}:stats`,
   /** deaths per pit (server-only; drives the pioneer score) */
-  falls: (d: number) => `d:${d}:falls`,
+  falls: (d: number) => `${NS}d:${d}:falls`,
   /** epitaph ids carved on the slab at stone i, by trust */
-  cell: (d: number, i: number) => `d:${d}:slab:${i}`,
+  cell: (d: number, i: number) => `${NS}d:${d}:slab:${i}`,
   /** deaths per slab stone */
-  slabFalls: (d: number) => `d:${d}:slabfalls`,
-  ep: (d: number, id: string) => `d:${d}:ep:${id}`,
-  epSeq: (d: number) => `d:${d}:epseq`,
-  user: (d: number, u: string) => `d:${d}:u:${u}`,
-  votes: (d: number, u: string) => `d:${d}:votes:${u}`,
+  slabFalls: (d: number) => `${NS}d:${d}:slabfalls`,
+  ep: (d: number, id: string) => `${NS}d:${d}:ep:${id}`,
+  epSeq: (d: number) => `${NS}d:${d}:epseq`,
+  user: (d: number, u: string) => `${NS}d:${d}:u:${u}`,
+  votes: (d: number, u: string) => `${NS}d:${d}:votes:${u}`,
   streak: (u: string) => `u:${u}:streak`,
-  seededCells: (d: number) => `d:${d}:seeded`,
+  seededCells: (d: number) => `${NS}d:${d}:seeded`,
 };
 
 const num = (v: string | undefined, fallback = 0): number => {
