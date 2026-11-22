@@ -84,8 +84,6 @@ const HERO_W = 16;
 const HERO_H = 28;
 /** where the hero's front hand is on the (right-facing) sprite */
 const HAND = { x: 14, y: 17 };
-/** the raised hand while cheering (right-facing sprite) */
-const CHEER_HAND = { x: 17, y: -1 };
 /** the door leaf (32 px) is centred on the door's column */
 const doorX = (board: Board): number => board.door.c * TILE - 8;
 
@@ -302,17 +300,19 @@ export class Scene {
       }
   }
 
+  /** The room's near edge, open below the start stone: steps lead up toward the camp. */
   private drawEntrance(x: CanvasRenderingContext2D): void {
     if (!this.atlas) return;
-    const [sx, sy, w, h] = FRAMES.doors_leaf_open;
-    const dx = START_CELL.c * TILE - 8, dy = TOP + ROWS * TILE;
+    const dy = TOP + ROWS * TILE;
+    const [lx, ly] = FRAMES.wall_top_mid;
+    for (let c = 0; c < COLS; c++) {
+      if (c === START_CELL.c) continue;
+      x.drawImage(this.atlas, lx, ly + 11, TILE, 5, c * TILE, dy, TILE, 5);
+    }
+    const [sx, sy, w, h] = FRAMES.floor_stairs;
     x.save();
-    x.beginPath();
-    x.rect(0, dy, SCENE_W, SCENE_H - dy);
-    x.clip();
-    x.translate(dx, dy + h);
-    x.scale(1, -1);
-    this.px(x, 'void0', 3, 2, 26, 27);
+    x.translate(START_CELL.c * TILE, dy + h);
+    x.scale(1, -1); // the steps climb toward you: up and out, back to the camp
     x.drawImage(this.atlas, sx, sy, w, h, 0, 0, w, h);
     x.restore();
   }
@@ -365,27 +365,6 @@ export class Scene {
       if (col !== 'pst1') x.drawImage(sp.arrow(g.arrow, 'ink').canvas, X + 3, Y + 3); // outline for coloured arrows
       x.drawImage(sp.arrow(g.arrow, col).canvas, X + 2, Y + 2);
     }
-  }
-
-  /**
-   * Arms up and a happy squint, pixelled over the dwarf's own frame. Coordinates
-   * are on the right-facing 16x28 sprite and mirror when he faces left.
-   */
-  private drawCheer(ctx: CanvasRenderingContext2D, hx: number, hy: number, flip: boolean): void {
-    const X = (x: number) => hx + (flip ? HERO_W - 1 - x : x);
-    const dot = (col: ColorKey, x: number, y: number) => this.px(ctx, col, X(x), hy + y);
-    // both arms raised high from the shoulders, out past the hair, hands open above the head
-    const arms: [number, number][][] = [
-      [[3, 20], [2, 19], [1, 18], [1, 17], [0, 16], [0, 15], [-1, 14], [-1, 13], [-1, 12], [-2, 11], [-2, 10]],
-      [[12, 20], [13, 19], [14, 18], [14, 17], [15, 16], [15, 15], [16, 14], [16, 13], [16, 12], [17, 11], [17, 10]],
-    ];
-    for (const arm of arms) for (const [x, y] of arm) { dot('ink', x - 1, y); dot('ink', x + 1, y); }
-    for (const arm of arms) for (const [x, y] of arm) dot('red1', x, y); // sleeves a shade darker than his hair
-    for (const [x, y] of [[-3, 9], [-2, 9], [-1, 9], [-2, 8], [16, 9], [17, 9], [18, 9], [17, 8]] as const) dot('ink', x, y - 1);
-    for (const [x, y] of [[-2, 9], [-2, 8], [-3, 8], [17, 9], [17, 8], [18, 8]] as const) dot('bone3', x, y);
-    // a happy squint: the eyes close into little arches
-    for (const [x, y] of [[8, 19], [9, 19], [11, 19], [12, 19]] as const) dot('bone1', x, y);
-    for (const [x, y] of [[8, 18], [9, 18]] as const) dot('ink', x, y);
   }
 
   /** The dwarf's spirit hovering over the pit where it died (drawn after lighting, so it glows). */
@@ -527,7 +506,7 @@ export class Scene {
       ? Math.floor(((hopP >= 0 ? hopP : exitP * 6) * 4) % 4)
       : this.reduced ? 0 : Math.floor(now / IDLE_FRAME_MS) % 4;
     const flip = this.facing < 0;
-    // cheering at the door: hopping with both arms up, the torch held high
+    // cheering at the door: hopping for joy, the torch thrust up high
     const cheering = s.phase === 'crossed' && s.celebrating && exitP === 0;
     if (cheering && !this.reduced) hy -= Math.round(Math.abs(Math.sin(t * 5.5)) * 5);
     if (showHero) {
@@ -546,16 +525,14 @@ export class Scene {
       const reviveP = this.reviveT0 >= 0 ? (now - this.reviveT0) / REVIVE_MS : 1;
       if (reviveP < 0.45) ctx.globalAlpha = Math.max(0, (reviveP - 0.1) / 0.35);
       this.frameOf(ctx, heroFrame(running, frameNo), hx, hy, flip);
-      if (cheering) this.drawCheer(ctx, hx, hy, flip);
       ctx.restore();
     }
 
     // ── lighting: the torch is the only light until the dark lifts ──
     // torch held out beside the head, so the flame never merges with the sprite
     const out = flip ? -1 : 1;
-    const hand = cheering
-      ? { x: hx + (flip ? HERO_W - 1 - CHEER_HAND.x : CHEER_HAND.x), y: hy + CHEER_HAND.y + 9 }
-      : { x: hx + (flip ? HERO_W - 1 - HAND.x : HAND.x) + out, y: hy + HAND.y };
+    // cheering, the torch is thrust up high; otherwise it's held out beside the head
+    const hand = { x: hx + (flip ? HERO_W - 1 - HAND.x : HAND.x) + out, y: hy + HAND.y - (cheering ? 7 : 0) };
     // a ghost carries no torch: a cold glow of its own lights the stones instead
     const torch = s.ghost ? { x: hx + 8, y: hy + 16 } : { x: hand.x, y: hand.y - 11 };
     const tint = s.ghost ? [0.62, 0.8, 1.05] : [1, 0.68, 0.38];
@@ -602,6 +579,14 @@ export class Scene {
     ctx.translate(sx, sy);
 
     // ── emissive layer ──
+    // a faint warmth spills down the steps from the camp fire above
+    {
+      const ex = START_CELL.c * TILE, ey = TOP + ROWS * TILE;
+      for (let k = 0; k < 8; k++) {
+        ctx.fillStyle = `rgba(255, 150, 60, ${(0.05 + 0.025 * k).toFixed(3)})`;
+        ctx.fillRect(ex + 1, ey + 8 + k, TILE - 2, 1);
+      }
+    }
     const blink = (seed: number, rate: number) => hash2(Math.floor(t * rate), Math.floor(seed * 1000));
 
     // once the dark lifts, slabs pulse gently so it's clear they can be read
@@ -630,6 +615,19 @@ export class Scene {
         this.px(ctx, col, X + e - 1, Y + 1, 2, 1); this.px(ctx, col, X + e, Y + 1, 1, 2);
         this.px(ctx, col, X + 1, Y + e, 2, 1); this.px(ctx, col, X + 1, Y + e - 1, 1, 2);
         this.px(ctx, col, X + e - 1, Y + e, 2, 1); this.px(ctx, col, X + e, Y + e - 1, 1, 2);
+      }
+    }
+
+    // a crossing: golden sparks burst up and drift around the cheering dwarf
+    if (cheering && !this.reduced) {
+      for (let k = 0; k < 12; k++) {
+        const q = (t * 0.8 + hash2(k, 21)) % 1;
+        if (q > 0.85) continue;
+        const ang = hash2(k, 5) * Math.PI * 2;
+        const r = 4 + q * 13;
+        const px = Math.round(hx + 8 + Math.cos(ang) * r);
+        const py = Math.round(hy + 12 + Math.sin(ang) * r * 0.6 - q * 10);
+        this.px(ctx, q < 0.3 ? 'warm6' : q < 0.6 ? 'warm5' : 'warm4', px, py);
       }
     }
 
