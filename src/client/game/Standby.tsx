@@ -7,31 +7,41 @@ import { DOOR_INK, FLAME, FLAME_LEGEND, INK_LEGEND, SKULL_INK } from './icons';
 import { PixelIcon } from './PixelIcon';
 import { MAP_H, MAP_W, RoomMap } from './RoomMap';
 
-export type StandbyHandle = { enter: (onDone: () => void, onCue?: (cue: CampCue) => void) => void };
+export type StandbyHandle = {
+  enter: (onDone: () => void, onCue?: (cue: CampCue) => void) => void;
+  /** after a crossing: walk on through the dark until the fire comes into view */
+  homeward: (onDone: () => void) => void;
+  /** then (under a fade) back to the ordinary camp, with its screen */
+  settle: () => void;
+};
 
 /** The resting room, scaled to whole pixels so the art stays crisp. */
 /** an arrival scene: the soul's homecoming after a game over, or the walk home after a crossing */
 type Revival = { kind: 'soul' | 'return'; onDone: () => void; onCue: (cue: CampCue) => void };
 
-const CampCanvas = forwardRef<StandbyHandle, { maxScale?: number; revival?: Revival | undefined }>(({ maxScale = 4, revival }, ref) => {
+const CampCanvas = forwardRef<StandbyHandle, { maxScale?: number; revival?: Revival | undefined; victory?: boolean }>(({ maxScale = 4, revival, victory = false }, ref) => {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const scene = useRef<CampScene | null>(null);
   const [scale, setScale] = useState(3);
   // read once, when the scene is made: a revival only ever plays on arrival
   const revivalRef = useRef(revival);
+  const victoryRef = useRef(victory);
 
   useEffect(() => {
     if (!canvas.current) return;
     const s = new CampScene(canvas.current);
     scene.current = s;
     if (revivalRef.current) s.revive(revivalRef.current.onDone, revivalRef.current.onCue, revivalRef.current.kind);
+    if (victoryRef.current) s.celebrate();
     s.start();
     return () => s.stop();
   }, []);
 
   useImperativeHandle(ref, () => ({
     enter: (onDone, onCue) => { if (scene.current) scene.current.enter(onDone, onCue); else onDone(); },
+    homeward: (onDone) => { if (scene.current) scene.current.homeward(onDone); else onDone(); },
+    settle: () => scene.current?.settle(),
   }), []);
 
   useLayoutEffect(() => {
@@ -140,9 +150,23 @@ export const Standby = forwardRef<StandbyHandle, {
   day: DayDto | null; me: MeDto | null; busy: boolean; onEnter: (e: MouseEvent) => void; onReview: (e: MouseEvent) => void; compact?: boolean;
   /** play the soul's homecoming first, and keep the screen bare until it's over */
   revival?: Revival | undefined;
-}>(({ day, me, busy, onEnter, onReview, compact = false, revival }, ref) => {
+  /** after a crossing: the dwarf celebrates in the dark (bare screen) until he walks home */
+  victory?: boolean;
+}>(({ day, me, busy, onEnter, onReview, compact = false, revival, victory = false }, ref) => {
   const [open, setOpen] = useState(false);
-  const [bare, setBare] = useState(!!revival);
+  const [bare, setBare] = useState(!!revival || victory);
+  const canvasRef = useRef<StandbyHandle>(null);
+  useImperativeHandle(ref, () => ({
+    enter: (onDone, onCue) => {
+      if (canvasRef.current) canvasRef.current.enter(onDone, onCue);
+      else onDone();
+    },
+    homeward: (onDone) => {
+      if (canvasRef.current) canvasRef.current.homeward(onDone);
+      else onDone();
+    },
+    settle: () => { canvasRef.current?.settle(); setBare(false); },
+  }), []);
   const [revivalOnce] = useState<Revival | undefined>(() => revival && {
     kind: revival.kind,
     onCue: revival.onCue,
@@ -156,7 +180,7 @@ export const Standby = forwardRef<StandbyHandle, {
         {day && <p className="camp-room">{day.room}</p>}
       </header>
       <div className="camp-middle">
-        <CampCanvas ref={ref} maxScale={compact ? 3 : 4} revival={revivalOnce} />
+        <CampCanvas ref={canvasRef} maxScale={compact ? 3 : 4} revival={revivalOnce} victory={victory} />
         {open && <Record day={day} me={me} />}
       </div>
       <div className="camp-actions">

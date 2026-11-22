@@ -55,6 +55,7 @@ body {
 }
 
 .app {
+  position: relative;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -144,6 +145,7 @@ body {
 }
 .card-layer-top { top: 6px; bottom: auto; }
 /* victory: the result over the dark while the dwarf cheers in his own torchlight */
+.victory-layer { position: absolute; left: 0; right: 0; bottom: 18px; display: flex; justify-content: center; pointer-events: none; z-index: 6; padding: 0 12px; }
 .victory { pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 10px 8px 4px; animation: rise 0.5s steps(6); }
 .victory-title { margin: 0; font-size: 34px; font-weight: 600; line-height: 1; color: var(--tab-torch-hi); text-shadow: 0 0 14px rgba(255, 190, 90, 0.35), 2px 2px 0 #2a1306; }
 .victory-time { margin: 0; font-size: 44px; font-weight: 600; line-height: 1; letter-spacing: 2px; color: var(--bone3); font-variant-numeric: tabular-nums; text-shadow: 2px 2px 0 #1a0e08; }

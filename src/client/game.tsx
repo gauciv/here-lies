@@ -31,20 +31,24 @@ export const App = () => {
   const [entering, setEntering] = useState(false);
   // back from a game over: the soul's homecoming plays before the camp shows anything
   const [reviving, setReviving] = useState<'soul' | 'return' | null>(null);
-  // 'Continue' after crossing: the dwarf walks out through the door, then home to the fire
-  const [exiting, setExiting] = useState(false);
+  // reaching the door: the dwarf walks out through it, celebrates in the dark camp, then walks home
+  const [victoryView, setVictoryView] = useState(false);
+  const [continuing, setContinuing] = useState(false);
   // game over → 'Back to camp': the soul first floats off the board to the stairs
   const [soulLeaving, setSoulLeaving] = useState(false);
   const standby = useRef<StandbyHandle>(null);
   const autoEnter = useRef(consumeAutoEnter());
   const { s, tap, onFallDone, onCrossDone, carve, selectArrow, skip, share, startRun, join, flair, walkAgain, leaveRun, openResult, startPlaying, openHelp, closeCard, hint } = useGame();
 
+  // through the door the moment the run is won (or when 'Your result' is reopened later)
+  const exiting = view === 'board' && s.phase === 'crossed' && s.card.kind === 'crossed';
+
   const scene = useMemo<SceneState | null>(() => {
     if (!s.board) return null;
     // the dark lifts once the run is over, but not while your ghost is still mourning itself
-    // the dark lifts once the run is over, but not while your ghost mourns or your dwarf cheers
-    const celebrating = s.phase === 'crossed' && s.card.kind === 'crossed';
-    const revealAll = (s.phase === 'crossed' || s.phase === 'idle') && s.card.kind !== 'gameOver' && !celebrating;
+    // the dark lifts once the run is over, but not while your ghost mourns or your dwarf heads out
+    const leavingThroughDoor = s.phase === 'crossed' && s.card.kind === 'crossed';
+    const revealAll = (s.phase === 'crossed' || s.phase === 'idle') && s.card.kind !== 'gameOver' && !leavingThroughDoor;
     const board = s.board;
     const graves = new Map<number, GraveView>();
     s.graves.forEach((g) => {
@@ -66,7 +70,6 @@ export const App = () => {
       carvePreview: carving !== null ? { stone: carving, dir: s.carveDir } : null,
       fading: s.fading,
       soulLeaving,
-      celebrating,
       exiting,
     };
   }, [s.board, s.revealed, s.player, s.graves, s.phase, s.card, s.carveDir, s.fading, soulLeaving, exiting]);
@@ -112,11 +115,33 @@ export const App = () => {
   if (view === 'camp') {
     return (
       <main className="app" onPointerDown={() => sound.setMode('camp')}>
-        {reviving === null && <div className="camp-corner"><MuteButton /></div>}
+        {reviving === null && !victoryView && <div className="camp-corner"><MuteButton /></div>}
         <Standby
           ref={standby} day={s.day} me={s.me} busy={entering || s.status !== 'ready'} onEnter={enter} onReview={() => crossFade('board')}
           revival={reviving ? { kind: reviving, onDone: () => setReviving(null), onCue: (cue) => sound.play(cue) } : undefined}
+          victory={victoryView}
         />
+        {victoryView && !continuing && s.me && s.card.kind === 'crossed' && (
+          <div className="victory-layer">
+            <VictoryCard
+              me={s.me} onShare={share} onJoin={join} onFlair={flair}
+              onContinue={() => {
+                setContinuing(true);
+                // walk on until the fire is in sight, then fade into the ordinary camp
+                standby.current?.homeward(() => {
+                  setFade(true);
+                  window.setTimeout(() => {
+                    standby.current?.settle();
+                    setVictoryView(false);
+                    setContinuing(false);
+                    closeCard();
+                    window.setTimeout(() => setFade(false), 150);
+                  }, 450);
+                });
+              }}
+            />
+          </div>
+        )}
         <div className={`screen-fade${fade ? ' on' : ''}`} />
       </main>
     );
@@ -128,9 +153,8 @@ export const App = () => {
       <Stage
         scene={scene} onTap={tap} onFallDone={onFallDone} onCrossDone={onCrossDone}
         onExitDone={() => {
-          setReviving('return');
+          setVictoryView(true);
           crossFade('camp');
-          window.setTimeout(() => { closeCard(); setExiting(false); }, 600);
         }}
         onSoulGone={() => {
           setReviving('soul');
@@ -155,7 +179,6 @@ export const App = () => {
                 onSelect={selectArrow} onCarve={carve} onSkip={skip}
               />
             )}
-            {card.kind === 'crossed' && !exiting && <VictoryCard me={s.me} onShare={share} onJoin={join} onFlair={flair} onContinue={() => setExiting(true)} />}
             {card.kind === 'spent' && <SpentCard me={s.me} day={s.day} onClose={closeCard} onShare={share} onJoin={join} />}
           </div>
         )}
