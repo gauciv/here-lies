@@ -1,7 +1,7 @@
 // All sound is synthesised with WebAudio: no files, nothing to license, tiny.
 // Audio only starts after the player's first tap (browser autoplay rules).
 
-type Cue = 'step' | 'fall' | 'carve' | 'vote' | 'cross' | 'deny' | 'crumble' | 'revive' | 'snuff' | 'victory' | 'door';
+type Cue = 'step' | 'fall' | 'carve' | 'vote' | 'cross' | 'deny' | 'crumble' | 'revive' | 'snuff' | 'victory' | 'door' | 'ignite';
 
 const MUTE_KEY = 'herelies:muted';
 
@@ -172,6 +172,11 @@ class Sound {
         this.burst(t + 0.85, 0.2, 160, 0.7, 0.18);
         break;
       }
+      case 'ignite': // a torch catches: a soft whoosh, then a few crackles
+        this.burst(t, 0.35, 500, 0.8, 0.12, 'bandpass');
+        this.burst(t + 0.05, 0.5, 1400, 0.6, 0.05, 'bandpass');
+        [0.22, 0.31, 0.45, 0.58].forEach((d, k) => this.burst(t + d, 0.03, 2400 + k * 500, 2, 0.05, 'highpass'));
+        break;
       case 'snuff': // a candle pinched out: a short hiss and a breath of smoke
         this.burst(t, 0.18, 5200, 0.8, 0.12, 'highpass');
         this.burst(t + 0.05, 0.35, 900, 0.7, 0.05);
