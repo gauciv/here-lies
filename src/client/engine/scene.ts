@@ -33,8 +33,6 @@ export type SceneState = {
   revealed: ReadonlySet<number>;
   player: Cell;
   graves: ReadonlyMap<number, GraveView>;
-  /** pits this player fell into: their own knowledge, shown as holes */
-  knownPits: ReadonlySet<number>;
   phase: Phase;
   /** the dark has lifted (crossed, or out of candles): show the whole board */
   revealAll: boolean;
@@ -547,7 +545,7 @@ export class Scene {
       const pulse = this.reduced ? 1 : 0.5 + 0.5 * Math.sin(t * 4);
       const col: ColorKey = pulse > 0.5 ? 'warm5' : 'warm3';
       for (const n of neighbors(s.player.c, s.player.r)) {
-        if (s.knownPits.has(idx(n.c, n.r)) || s.board.walls[idx(n.c, n.r)]) continue;
+        if (s.board.walls[idx(n.c, n.r)]) continue;
         const X = n.c * TILE, Y = TOP + n.r * TILE, e = TILE - 2;
         this.px(ctx, col, X + 1, Y + 1, 2, 1); this.px(ctx, col, X + 1, Y + 1, 1, 2);
         this.px(ctx, col, X + e - 1, Y + 1, 2, 1); this.px(ctx, col, X + e, Y + 1, 1, 2);

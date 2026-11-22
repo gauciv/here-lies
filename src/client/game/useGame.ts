@@ -150,11 +150,6 @@ export const useGame = () => {
         toast('Solid rock. Find another way.');
         return;
       }
-      if (s.me?.fellInto.includes(i)) {
-        sound.play('deny');
-        toast('You already fell there.');
-        return;
-      }
       // fall through to the step below; slabs are walkable
     } else {
       // graves can only be read where the torch (or the dawn) shows them

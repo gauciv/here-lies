@@ -52,16 +52,15 @@ export const App = () => {
         wear: g.top?.visits ?? 0,
       });
     });
-    const knownPits = new Set(s.me?.fellInto ?? []);
     const carving = s.card.kind === 'carve' ? s.card.i : null;
     return {
-      board: s.board, revealed: s.revealed, player: s.player, graves, knownPits, phase: s.phase, revealAll,
+      board: s.board, revealed: s.revealed, player: s.player, graves, phase: s.phase, revealAll,
       // your ghost lingers in its pit while you carve, or until you respawn
       ghost: carving !== null || s.card.kind === 'fellAgain' || s.card.kind === 'gameOver',
       carvePreview: carving !== null ? { stone: carving, dir: s.carveDir } : null,
       fading: s.fading,
     };
-  }, [s.board, s.revealed, s.player, s.graves, s.phase, s.me, s.card, s.carveDir, s.fading]);
+  }, [s.board, s.revealed, s.player, s.graves, s.phase, s.card, s.carveDir, s.fading]);
 
   /** Fade to black, swap what's on screen, fade back in. */
   const crossFade = useCallback((to: 'camp' | 'board') => {
