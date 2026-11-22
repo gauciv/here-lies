@@ -11,6 +11,7 @@
   <https://opengameart.org/content/parchment-gui> · License: CC0 1.0. Prepared by `tools/build_extras.py`.
 - **Scroll UI Container** by Chloe Wolfe: the record scroll, pixelated, recoloured and outlined to match the game.
   <https://opengameart.org/content/scroll-ui-container> · License: CC0 1.0. Prepared by `tools/build_scroll.py`.
+- The app icon is built by `tools/build_icon.py` from the same pixels: CC0 floor tiles and the original slab and arrow.
 - Torch, flame, grave slabs, arrows, ghost, candles, digits, lighting and all sound are original to Here Lies (hand-pixelled / synthesized in code).
 
 ## Fonts

@@ -56,5 +56,8 @@
         "SUBSCRIBE_TO_SUBREDDIT"
       ]
     }
+  },
+  "marketingAssets": {
+    "icon": "assets/icon.png"
   }
 }
