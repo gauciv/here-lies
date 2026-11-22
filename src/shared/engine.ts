@@ -31,7 +31,7 @@ export type Store = {
 export class GameError extends Error {}
 
 /** Bump when the stored shape changes, so old days don't mix with new rules. */
-const NS = 'v3:';
+const NS = 'v4:';
 
 const K = {
   stats: (d: number) => `${NS}d:${d}:stats`,
