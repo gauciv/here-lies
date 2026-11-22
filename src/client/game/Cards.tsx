@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CANDLES_PER_DAY, dayStartUtc } from '../../shared/board';
-import { EPITAPHS, epitaphText, verdictOf, type EpitaphId, type Verdict } from '../../shared/epitaphs';
+import { EPITAPHS, epitaphText, isForgotten, verdictOf, type EpitaphId, type Verdict } from '../../shared/epitaphs';
 import type { DayDto, EpitaphDto, GraveDto, MeDto, Vote } from '../../shared/api';
 
 const VERDICT_LABEL: Record<Verdict, string> = {
@@ -9,6 +9,9 @@ const VERDICT_LABEL: Record<Verdict, string> = {
   disputed: 'Disputed',
   unjudged: 'Unjudged',
 };
+
+const who = (user: string, me: MeDto): string =>
+  user === me.username ? 'you' : isForgotten(user) ? 'a forgotten soul' : `u/${user}`;
 
 const ordinal = (n: number): string => {
   const s = ['th', 'st', 'nd', 'rd'];
@@ -55,10 +58,10 @@ export const GraveCard = ({ grave, list, me, onVote, onClose }: {
       <button className="card-close" onClick={onClose} aria-label="Close">×</button>
       {top ? (
         <>
-          <p className="card-kicker">Here lies {top.user === me.username ? 'you' : `u/${top.user}`}</p>
+          <p className="card-kicker">Here lies {who(top.user, me)}</p>
           <p className="epitaph">“{epitaphText(top.text)}”</p>
           <p className="card-meta">
-            Fell on step {top.step} · <span className={`verdict verdict-${verdict}`}>{VERDICT_LABEL[verdict]}</span>
+            {isForgotten(top.user) ? 'Long before today' : `Fell on step ${top.step}`} · <span className={`verdict verdict-${verdict}`}>{VERDICT_LABEL[verdict]}</span>
             {grave.falls > 1 ? ` · ${grave.falls} fell here` : ''}
           </p>
           <VoteRow e={top} me={me} onVote={onVote} />
@@ -69,7 +72,7 @@ export const GraveCard = ({ grave, list, me, onVote, onClose }: {
                 {others.map((e) => (
                   <li key={e.id}>
                     <span className="more-text">“{epitaphText(e.text)}”</span>
-                    <span className="more-who">u/{e.user} · {e.honest} honest · {e.liar} liar</span>
+                    <span className="more-who">{who(e.user, me)} · {e.honest} honest · {e.liar} liar</span>
                     {e.myVote === null && e.user !== me.username && <VoteRow e={e} me={me} onVote={onVote} />}
                   </li>
                 ))}
