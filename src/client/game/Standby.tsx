@@ -10,7 +10,7 @@ import { MAP_H, MAP_W, RoomMap } from './RoomMap';
 export type StandbyHandle = {
   enter: (onDone: () => void, onCue?: (cue: CampCue) => void) => void;
   /** after a crossing: walk on through the dark until the fire comes into view */
-  homeward: (onDone: () => void) => void;
+  homeward: (onDone: () => void, onCue?: (cue: CampCue) => void) => void;
   /** then (under a fade) back to the ordinary camp, with its screen */
   settle: () => void;
 };
@@ -40,7 +40,7 @@ const CampCanvas = forwardRef<StandbyHandle, { maxScale?: number; revival?: Revi
 
   useImperativeHandle(ref, () => ({
     enter: (onDone, onCue) => { if (scene.current) scene.current.enter(onDone, onCue); else onDone(); },
-    homeward: (onDone) => { if (scene.current) scene.current.homeward(onDone); else onDone(); },
+    homeward: (onDone, onCue) => { if (scene.current) scene.current.homeward(onDone, onCue); else onDone(); },
     settle: () => scene.current?.settle(),
   }), []);
 
@@ -161,8 +161,8 @@ export const Standby = forwardRef<StandbyHandle, {
       if (canvasRef.current) canvasRef.current.enter(onDone, onCue);
       else onDone();
     },
-    homeward: (onDone) => {
-      if (canvasRef.current) canvasRef.current.homeward(onDone);
+    homeward: (onDone, onCue) => {
+      if (canvasRef.current) canvasRef.current.homeward(onDone, onCue);
       else onDone();
     },
     settle: () => { canvasRef.current?.settle(); setBare(false); },

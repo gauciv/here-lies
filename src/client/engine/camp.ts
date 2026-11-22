@@ -35,7 +35,12 @@ const VICTORY_SPOT = { x: 48, y: 32 };
  */
 const WALK_MS = 2000;
 const REVEAL_MS = 2900;
-const HOME_MS = 4000;
+/** he reaches his place by the fire */
+const ARRIVE_MS = 4000;
+/** then puts his torch out (flame shrinks, a curl of smoke) and tucks it away by his side */
+const SNUFF_MS = 4500;
+const STOW_MS = 5000;
+const HOME_MS = 5300;
 /** how far the floor rolls in the walk: whole rows, ending exactly on the camp's own floor */
 const ROLL_PX = 5 * T;
 /** where the soul hovers beside the fire, waiting for its body */
@@ -44,7 +49,7 @@ const SOUL_REST = { x: 67, y: 40 };
 const HAND = { x: 14, y: 17 };
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
 
-export type CampCue = 'ignite' | 'door' | 'revive';
+export type CampCue = 'ignite' | 'door' | 'revive' | 'snuff';
 
 type Light = { x: number; y: number; r: number; k: number; tint: readonly [number, number, number] };
 const COLD: readonly [number, number, number] = [0.55, 0.78, 1.05];
@@ -143,11 +148,13 @@ export class CampScene {
   }
 
   /** He walks on for a while, the floor rolling by, until the fire comes into view ahead. */
-  homeward(onDone: () => void): void {
+  homeward(onDone: () => void, onCue?: (cue: CampCue) => void): void {
     if (!this.victory) { onDone(); return; }
     if (this.reduced) { onDone(); return; }
     this.homeT0 = performance.now();
     this.onHome = onDone;
+    this.onCue = onCue ?? null;
+    this.cued.clear();
   }
 
   /** Back to the ordinary camp (done under a fade, so the cut can't be seen). */
@@ -285,7 +292,11 @@ export class CampScene {
     const walking = this.victory && homeMs >= 0 && walkK < 1;
     // the camp's walls and fire fade in around him, then he walks to his place by the fire
     const reveal = this.victory && homeMs >= 0 ? ease((homeMs - WALK_MS) / (REVEAL_MS - WALK_MS)) : 0;
-    const settleK = this.victory && homeMs >= 0 ? ease((homeMs - REVEAL_MS) / (HOME_MS - REVEAL_MS)) : 0;
+    const settleK = this.victory && homeMs >= 0 ? ease((homeMs - REVEAL_MS) / (ARRIVE_MS - REVEAL_MS)) : 0;
+    // at the fire: the flame dies down to nothing, then the dead torch is lowered and tucked away
+    const snuffK = this.victory && homeMs >= 0 ? Math.max(0, Math.min(1, (homeMs - ARRIVE_MS) / (SNUFF_MS - ARRIVE_MS))) : 0;
+    const stowK = this.victory && homeMs >= 0 ? ease((homeMs - STOW_MS) / (HOME_MS - STOW_MS)) : 0;
+    if (this.victory && homeMs >= ARRIVE_MS + 150) this.cue('snuff');
     const fireShown = this.victory ? reveal : 1;
     const fire = FIRE;
     const fireLight = FIRE_LIGHT;
@@ -434,7 +445,11 @@ export class CampScene {
         this.tile(fn, Math.round(hx), Math.round(hy), !facingDoor);
       }
       if (entering && !facingDoor) this.drawTorch({ x: handX, y: handY }, tip);
-      if (carrying) this.drawTorch({ x: handX, y: handY }, upright);
+      if (carrying && this.victory) {
+        // lowered and tucked against his side once it's out
+        const tucked = { x: handX - 1, y: handY + 3 };
+        if (stowK < 1) this.drawTorch({ x: handX, y: handY }, { x: Math.round(lerp(upright.x, tucked.x, stowK)), y: Math.round(lerp(upright.y, tucked.y, stowK)) });
+      } else if (carrying) this.drawTorch({ x: handX, y: handY }, upright);
     }
     c.restore();
 
@@ -446,7 +461,7 @@ export class CampScene {
     if (torchOn) lights.push({ x: tip.x, y: tip.y, r: 30 * flick * torchFade, k: 1.1, tint: TORCH_TINT });
     if (carrying && this.victory) {
       // after a crossing his torch is the whole world: a wide circle centred on him
-      const out = 1 - Math.max(0, Math.min(1, (homeMs - (HOME_MS - 450)) / 450));
+      const out = 1 - snuffK;
       lights.push({ x: hx + 8, y: hy + 15, r: 50 * flick * out, k: 1.15, tint: TORCH_TINT });
     } else if (carrying) lights.push({ x: upright.x, y: upright.y, r: 30 * flick * (1 - span(q, 0.72, 0.84)), k: 1.1, tint: TORCH_TINT });
     if (soulAlpha > 0) lights.push({ x: soul.x + 8, y: soul.y + 12, r: 24, k: 1.0 * soulAlpha, tint: COLD });
@@ -504,7 +519,20 @@ export class CampScene {
       }
     }
     if (torchOn && through < 0.6) this.drawFlame(tip.x, tip.y, t);
-    if (carrying && q < 0.8 && (!this.victory || homeMs < HOME_MS - 200)) this.drawFlame(upright.x, upright.y, t);
+    if (carrying && !this.victory && q < 0.8) this.drawFlame(upright.x, upright.y, t);
+    if (carrying && this.victory) {
+      if (snuffK < 0.55) this.drawFlame(upright.x, upright.y, t);
+      else if (snuffK < 1) { this.px('warm4', upright.x, upright.y - 1); this.px('warm2', upright.x, upright.y); } // the last ember
+      // a thin curl of smoke drifts up from the dead torch
+      if (snuffK > 0.5 && homeMs < STOW_MS + 200) {
+        const sm = (homeMs - (ARRIVE_MS + (SNUFF_MS - ARRIVE_MS) * 0.5)) / 800;
+        for (let k = 0; k < 4; k++) {
+          const q2 = sm - k * 0.18;
+          if (q2 < 0 || q2 > 1) continue;
+          this.px(q2 < 0.5 ? 'stone7' : 'stone5', Math.round(upright.x + Math.sin(q2 * 6 + k) * 1.5), Math.round(upright.y - 2 - q2 * 9));
+        }
+      }
+    }
     if (entering && p >= 0.3 && p < 0.33 && this.sparks.length < 14) {
       for (let k = 0; k < 4; k++) {
         this.sparks.push({ x: tip.x, y: tip.y, vx: (hash2(k, Math.floor(now)) - 0.5) * 50, vy: -20 - hash2(Math.floor(now), k) * 40, life: 0.5 });

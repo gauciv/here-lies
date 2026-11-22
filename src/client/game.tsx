@@ -133,7 +133,7 @@ export const App = () => {
                   setVictoryView(false);
                   setContinuing(false);
                   closeCard();
-                });
+                }, (cue) => sound.play(cue));
               }}
             />
           </div>
