@@ -63,6 +63,7 @@ void test('fall → carve → cross loop', async () => {
   assert.equal(crossed.me.crossed, true);
   assert.equal(crossed.me.rank, 1);
   assert.equal(crossed.me.streak, 1);
+  assert.equal(crossed.me.bestStreak, 1);
   await assert.rejects(e.cross(DAY, 'alice', crossPath), GameError);
 
   const init = await e.init(DAY, 'bob', 't3_x');

@@ -59,6 +59,8 @@ export type MeDto = {
   /** pits this player has fallen into today (their own hard-won knowledge) */
   fellInto: number[];
   streak: number;
+  /** longest crossing streak this player has ever had here */
+  bestStreak: number;
   /** already posted today's result as a comment */
   shared: boolean;
   /** % of pits still unmapped by others when you crossed (null until crossed) */

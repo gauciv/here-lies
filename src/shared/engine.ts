@@ -118,6 +118,7 @@ export class Engine {
       uncarvedReplaces: u.uncarvedReplaces === '1',
       fellInto: parseList(u.fellAt),
       streak: last >= day - 1 ? num(st.count) : 0,
+      bestStreak: Math.max(num(st.best), last >= day - 1 ? num(st.count) : 0),
       shared: u.shared === '1',
       pioneer: u.pioneer ? num(u.pioneer) : null,
       myArrow: await this.myArrow(day, u.myEp),
@@ -411,7 +412,7 @@ export class Engine {
       const st = await this.store.hGetAll(K.streak(user));
       const last = num(st.last, -99);
       const count = last === day - 1 ? num(st.count) + 1 : last === day ? num(st.count) : 1;
-      await this.store.hSet(K.streak(user), { last: String(day), count: String(count) });
+      await this.store.hSet(K.streak(user), { last: String(day), count: String(count), best: String(Math.max(count, num(st.best))) });
     }
     const [me, dayDto] = await Promise.all([this.me(day, user), this.dayDto(day)]);
     return { type: 'cross', me, day: dayDto };
