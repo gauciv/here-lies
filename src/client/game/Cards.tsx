@@ -137,7 +137,6 @@ export const GraveCard = ({ grave, me, board, judged, onClose }: {
           <li className={`tag ${truth ? 'tag-true' : 'tag-lie'}`}>{truth ? `True · saved ${top.saved}` : `Lie · fooled ${top.fooled}`}</li>
         )}
         <li className="tag">{grave.falls} fell here</li>
-        <li className="tag">{isForgotten(top.user) ? 'Long ago' : `Step ${top.step}`}</li>
         <li className={`tag${left <= 2 ? ' tag-worn' : ''}`}>Crumbles in {left}</li>
       </ul>
     </section>
@@ -234,8 +233,6 @@ export const CrossedCard = ({ me, day, onClose, onShare, onJoin, onFlair }: { me
       {title && <p className="pioneer-title">{title}</p>}
       <dl className="stats">
         <div><dt>Pioneer</dt><dd>{me.pioneer !== null ? `${me.pioneer}%` : '—'}</dd></div>
-        <div><dt>Steps</dt><dd>{me.steps ?? '—'}</dd></div>
-        <div><dt>Candles</dt><dd>{me.candles}/{CANDLES_PER_DAY}</dd></div>
         <div><dt>Streak</dt><dd>{me.streak}</dd></div>
       </dl>
       {me.myArrow && <ArrowRecord mine={me.myArrow} />}
