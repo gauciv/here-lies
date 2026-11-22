@@ -108,8 +108,9 @@ body {
   align-items: center;
   justify-content: center;
   position: relative;
+  overflow: hidden;
 }
-.stage-frame { position: relative; }
+.stage-frame { position: relative; transition: translate 0.35s ease-out; }
 .scene {
   display: block;
   image-rendering: pixelated;
@@ -256,7 +257,7 @@ body {
 .carve-title { margin: 0; font-size: 20px; font-weight: 600; color: var(--bone3); line-height: 1; }
 .carve-what { margin: 0; font-size: 13px; line-height: 1.25; color: var(--bone2); max-width: 38ch; }
 .card-carve { gap: 4px; padding: 4px 10px 6px; max-width: 360px; }
-.card-carve .compass { --cb: clamp(30px, 4.6vh, 34px); gap: 3px; margin: 1px auto; }
+.card-carve .compass { --cb: clamp(36px, 5.4vh, 40px); gap: 3px; margin: 1px auto; }
 .carve-verdict { margin: 0; font-size: 12px; color: var(--tab-stone-h); min-height: 1.25em; }
 .carve-verdict.is-true { color: var(--tab-torch-hi); }
 .carve-verdict.is-lie { color: var(--tab-blood); }

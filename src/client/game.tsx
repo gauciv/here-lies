@@ -116,7 +116,10 @@ export const App = () => {
   return (
     <main className="app">
       {s.me ? <Hud me={s.me} day={s.day?.day ?? null} onHelp={openHelp} /> : <header className="hud" />}
-      <Stage scene={scene} onTap={tap} onFallDone={onFallDone} onCrossDone={onCrossDone}>
+      <Stage
+        scene={scene} onTap={tap} onFallDone={onFallDone} onCrossDone={onCrossDone}
+        focusRow={card.kind === 'carve' || card.kind === 'fellAgain' || card.kind === 'gameOver' ? s.player.r : null}
+      >
         {s.me && s.day && !s.fading && (
           <div className={`card-layer ${s.player.r >= 4 && s.phase !== 'crossed' && card.kind !== 'fellAgain' && card.kind !== 'gameOver' ? 'card-layer-top' : ''}`}>
             {card.kind === 'grave' && grave && s.board && (
