@@ -9,7 +9,7 @@ import { useGame } from './game/useGame';
 import type { GraveView, SceneState } from './engine/scene';
 
 export const App = () => {
-  const { s, tap, onFallDone, onCrossDone, carve, vote, closeCard, hint } = useGame();
+  const { s, tap, onFallDone, onCrossDone, carve, vote, share, join, closeCard, hint } = useGame();
 
   const scene = useMemo<SceneState | null>(() => {
     if (!s.board) return null;
@@ -50,8 +50,8 @@ export const App = () => {
               <GraveCard grave={grave} list={s.details.get(card.i)} me={s.me} onVote={vote} onClose={closeCard} />
             )}
             {card.kind === 'carve' && <CarveCard me={s.me} step={carveStep} onCarve={carve} />}
-            {card.kind === 'crossed' && <CrossedCard me={s.me} day={s.day} onClose={closeCard} />}
-            {card.kind === 'spent' && <SpentCard day={s.day} onClose={closeCard} />}
+            {card.kind === 'crossed' && <CrossedCard me={s.me} day={s.day} onClose={closeCard} onShare={share} onJoin={join} />}
+            {card.kind === 'spent' && <SpentCard me={s.me} day={s.day} onClose={closeCard} onShare={share} onJoin={join} />}
           </div>
         )}
         {s.toast && <div className="toast" role="status">{s.toast}</div>}

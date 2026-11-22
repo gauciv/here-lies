@@ -215,6 +215,32 @@ export const useGame = () => {
     }
   }, [s.day, toast]);
 
+  const share = useCallback(async (): Promise<boolean> => {
+    const api = apiRef.current;
+    const day = s.day;
+    if (!api || !day) return false;
+    try {
+      const res = await api.share(day.day);
+      setS((p) => ({ ...p, me: res.me }));
+      return true;
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not post your comment.');
+      return false;
+    }
+  }, [s.day, toast]);
+
+  const join = useCallback(async (): Promise<boolean> => {
+    const api = apiRef.current;
+    if (!api) return false;
+    try {
+      await api.join();
+      return true;
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not join right now.');
+      return false;
+    }
+  }, [toast]);
+
   const closeCard = useCallback(() => {
     setS((p) => (p.card.kind === 'carve' ? p : { ...p, card: { kind: 'none' } }));
   }, []);
@@ -232,5 +258,5 @@ export const useGame = () => {
     return 'Reach the far wall.';
   }, [s.status, s.phase, s.revealed.size, s.walkedThisRun, s.graves.size]);
 
-  return { s, tap, onFallDone, onCrossDone, carve, vote, closeCard, openGrave, hint };
+  return { s, tap, onFallDone, onCrossDone, carve, vote, share, join, closeCard, openGrave, hint };
 };

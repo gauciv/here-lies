@@ -61,4 +61,10 @@ export const localApi: GameApi = {
   carve: (d, i, text) => wait(Promise.resolve()).then(() => engine.carve(d, ME, i, text)),
   vote: (d, id, v) => wait(Promise.resolve()).then(() => engine.vote(d, ME, id, v)),
   grave: (d, i) => wait(Promise.resolve()).then(() => engine.graveDetail(d, ME, i)),
+  share: (d) =>
+    wait(Promise.resolve())
+      .then(() => engine.claimShare(d, ME))
+      .then((text) => { console.info('[local preview] would comment:\n' + text); return engine.confirmShare(d, ME, true); })
+      .then((me) => ({ type: 'share' as const, me })),
+  join: () => wait(Promise.resolve()).then(() => ({ type: 'join' as const })),
 };

@@ -5,6 +5,8 @@ import type {
   CrossResponse,
   FallResponse,
   GraveResponse,
+  JoinResponse,
+  ShareResponse,
   InitResponse,
   Vote,
   VoteResponse,
@@ -17,4 +19,6 @@ export type GameApi = {
   carve: (day: number, i: number, text: EpitaphId) => Promise<CarveResponse>;
   vote: (day: number, id: string, vote: Vote) => Promise<VoteResponse>;
   grave: (day: number, i: number) => Promise<GraveResponse>;
+  share: (day: number) => Promise<ShareResponse>;
+  join: () => Promise<JoinResponse>;
 };

@@ -22,4 +22,6 @@ export const httpApi: GameApi = {
   carve: (day, i, text) => call('carve', { day, i, text }),
   vote: (day, id, vote) => call('vote', { day, id, vote }),
   grave: (day, i) => call(`grave?day=${day}&i=${i}`),
+  share: (day) => call('share', { day }),
+  join: () => call('join', {}),
 };

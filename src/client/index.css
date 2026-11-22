@@ -199,6 +199,13 @@ body {
 .stats dt { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--stone7); }
 .stats dd { margin: 0; font-size: 22px; font-weight: 600; color: var(--warm5); font-variant-numeric: tabular-nums; }
 
+.share { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; padding-top: 10px; border-top: 2px dashed var(--stone4); }
+.share-label { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--stone7); }
+.share-preview { margin: 0; padding: 8px 10px; background: var(--void2); color: var(--bone2); font-size: 13px; line-height: 1.4; white-space: pre-line; }
+.share-done { margin: 0; color: var(--warm5); font-size: 14px; }
+.btn-share { color: #1a0f08; background: var(--warm5); }
+.btn-share:hover:not(:disabled) { background: var(--bone3); color: #1a0f08; }
+
 .toast {
   position: absolute;
   top: 10px;
