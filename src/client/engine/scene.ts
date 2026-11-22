@@ -190,6 +190,13 @@ export class Scene {
     x.restore();
   }
 
+  /** the 6×6 skull inside the tileset's 16×16 skull frame */
+  private skull(x: CanvasRenderingContext2D, dx: number, dy: number): void {
+    if (!this.atlas) return;
+    const [sx, sy] = FRAMES.skull;
+    x.drawImage(this.atlas, sx + 5, sy + 7, 6, 6, dx, dy, 6, 6);
+  }
+
   private px(x: CanvasRenderingContext2D, color: ColorKey, px: number, py: number, w = 1, h = 1): void {
     x.fillStyle = C[color];
     x.fillRect(px, py, w, h);
@@ -247,7 +254,13 @@ export class Scene {
     this.frameOf(x, 'hole', X, Y);
     const sp = getSprites();
     x.drawImage((g.mine ? sp.stoneMine : sp.stone).canvas, X + 3, Y + 2);
-    if (g.falls > 1) this.frameOf(x, 'skull', X - 4, Y + 4);
+    // one skull per extra death (up to 3), piled at the foot of the stone
+    const extra = Math.min(3, g.falls - 1);
+    const spots: readonly (readonly [number, number])[] = [[X, Y + 10], [X + 10, Y + 10], [X, Y + 5]];
+    for (let k = 0; k < extra; k++) {
+      const [sx, sy] = spots[k]!;
+      this.skull(x, sx, sy);
+    }
     if (isKnownLiar(g)) {
       for (let k = 0; k < 4; k++) {
         this.px(x, 'red2', X + 5 + k, Y + 5 + k);
