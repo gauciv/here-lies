@@ -343,3 +343,39 @@ body {
   font-size: 19px;
   padding: 3px 14px 5px;
 }
+
+/* ── standby room ─────────────────────────────────── */
+.standby { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 10px 12px; }
+.camp-stage { flex: 1; min-height: 0; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.parchment {
+  width: 100%;
+  max-width: 380px;
+  border: 24px solid transparent;
+  border-image: url('./assets/ui/parchment.png') 24 fill stretch;
+  padding: 0 6px 2px;
+  margin-top: -14px;
+  color: #3b2a1a;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.5));
+}
+.parch-title { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: #4a3020; }
+.parch-line { margin: 0; font-size: 14px; color: #5a4128; }
+.parch-tier { font-weight: 600; }
+.parch-gentle { color: #3f5f2a; }
+.parch-tricky { color: #8a5a10; }
+.parch-cruel { color: #9a4a12; }
+.parch-brutal { color: #8a1f1a; }
+.parch-streak { margin: 2px 0; font-size: 15px; color: #3b2a1a; }
+.parch-big { font-size: 30px; font-weight: 600; color: #7a2c12; vertical-align: -3px; margin-right: 4px; }
+.parch-status { margin: 0; font-size: 13px; color: #5a4128; font-style: italic; }
+.parch-actions { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 6px; }
+.parch-note { font-size: 12px; color: #6b5134; }
+.btn-enter { font-size: 18px; padding: 3px 14px 5px; }
+.standby-compact .parchment { margin-top: -10px; }
+.screen-fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 0.4s steps(6); z-index: 50; }
+.screen-fade.on { opacity: 1; }
+.camp-corner { position: absolute; top: 10px; right: 12px; display: flex; gap: 10px; z-index: 5; }
