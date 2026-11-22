@@ -67,13 +67,11 @@ export type Difficulty = {
   comparisons: readonly [number, number];
   /** chance that each of the morning's forgotten slabs tells the truth */
   honesty: number;
-  /** one short line about how the day plays, shown beside the tier in the game */
-  hint: string;
 };
 
-const GENTLE: Difficulty = { name: 'Gentle', pits: [11, 12], comparisons: [1, 2], honesty: 0.8, hint: 'Easy footing.' };
-const TRICKY: Difficulty = { name: 'Tricky', pits: [12, 14], comparisons: [2, 3], honesty: 0.6, hint: 'Count twice.' };
-const CRUEL: Difficulty = { name: 'Cruel', pits: [14, 15], comparisons: [3, 5], honesty: 0.4, hint: 'Few safe stones.' };
+const GENTLE: Difficulty = { name: 'Gentle', pits: [11, 12], comparisons: [1, 2], honesty: 0.8 };
+const TRICKY: Difficulty = { name: 'Tricky', pits: [12, 14], comparisons: [2, 3], honesty: 0.6 };
+const CRUEL: Difficulty = { name: 'Cruel', pits: [14, 15], comparisons: [3, 5], honesty: 0.4 };
 
 // A gentle weekly rhythm (UTC): easy at the start of the week, hardest on
 // Friday and Saturday, easing off on Sunday. Every board is crossable on logic
@@ -115,7 +113,7 @@ export const generateBoard = (day: number): Board => {
   if (cached) return cached;
   const diff = difficultyOf(day);
   // the room's shape and name are fixed for the day; only the pits are searched
-  const { walls, name } = roomPlan(day, mulberry32(hashInts(0x0b0e, day)));
+  const { walls, name, tip } = roomPlan(day, mulberry32(hashInts(0x0b0e, day)));
   const [lo, hi] = pitRange(diff, walls);
   const doors = Array.from({ length: COLS }, (_, c) => c).filter((c) => !walls[idx(c, 0)]);
   let fallback: Board | null = null;
@@ -124,7 +122,7 @@ export const generateBoard = (day: number): Board => {
     const count = lo + Math.floor(rand() * (hi - lo + 1));
     // the door moves along the far wall from day to day
     const door: Cell = { c: doors[Math.floor(rand() * doors.length)] ?? START.c, r: 0 };
-    const board: Board = { day, cols: COLS, rows: ROWS, pits: placePits(rand, count, door, walls), walls, name, start: START, door };
+    const board: Board = { day, cols: COLS, rows: ROWS, pits: placePits(rand, count, door, walls), walls, name, tip, start: START, door };
     const result = solve(board);
     if (!result.solved) continue;
     if (result.comparisons >= diff.comparisons[0] && result.comparisons <= diff.comparisons[1]) {

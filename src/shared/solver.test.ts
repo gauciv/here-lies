@@ -6,7 +6,7 @@ import { solve } from './solver.ts';
 const boardWith = (pitCells: [number, number][]): Board => {
   const pits = new Array<boolean>(COLS * ROWS).fill(false);
   for (const [c, r] of pitCells) pits[idx(c, r)] = true;
-  return { day: 0, cols: COLS, rows: ROWS, pits, walls: pits.map(() => false), name: 'Test', start: START, door: { c: 3, r: 0 } };
+  return { day: 0, cols: COLS, rows: ROWS, pits, walls: pits.map(() => false), name: 'Test', tip: '', start: START, door: { c: 3, r: 0 } };
 };
 
 void test('an empty board is crossed on pure zeros', () => {

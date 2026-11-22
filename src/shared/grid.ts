@@ -15,6 +15,8 @@ export type Board = {
   walls: boolean[];
   /** today's room, e.g. "The Drowned Gallery" */
   name: string;
+  /** a subtle line about the room's shape */
+  tip: string;
   start: Cell;
   /** the exit: a stone in the far row, in front of the door (column varies by day) */
   door: Cell;

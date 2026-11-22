@@ -1,5 +1,5 @@
 import type { MeDto } from '../../shared/api';
-import { difficultyOf } from '../../shared/board';
+import { difficultyOf, generateBoard } from '../../shared/board';
 import { PixelIcon } from './PixelIcon';
 import { useState } from 'react';
 import { SPEAKER_LEGEND, SPEAKER_OFF, SPEAKER_ON } from './icons';
@@ -20,13 +20,13 @@ export const MuteButton = () => {
   );
 };
 
-/** The day's difficulty: a coloured stamp, and a hand-written line on how it plays. */
+/** The day's difficulty as a coloured stamp, and a subtle hand-written tip about the room. */
 export const DayTier = ({ day }: { day: number }) => {
   const diff = difficultyOf(day);
   return (
     <p className="hud-tier">
       <b className={`hud-tier-name tier-${diff.name.toLowerCase()}`}>{diff.name}</b>
-      <span className="hud-hint">{diff.hint}</span>
+      <span className="hud-hint">{generateBoard(day).tip}</span>
     </p>
   );
 };

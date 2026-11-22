@@ -7,19 +7,22 @@ export type RoomPlan = {
   /** walls[idx(c, r)] === true where the floor is solid rock you can't step on */
   walls: boolean[];
   name: string;
+  /** a subtle line about the room's shape, never its pits or door */
+  tip: string;
 };
 
-type Shape = { noun: readonly string[]; cells: (mirror: boolean, rand: () => number) => [number, number][] };
+type Shape = { noun: readonly string[]; tip: string; cells: (mirror: boolean, rand: () => number) => [number, number][] };
 
 const mirrorCells = (cells: [number, number][], mirror: boolean): [number, number][] =>
   mirror ? cells.map(([c, r]) => [COLS - 1 - c, r]) : cells;
 
 const SHAPES: readonly Shape[] = [
   // the plain room
-  { noun: ['Hall', 'Crypt', 'Vault'], cells: () => [] },
+  { noun: ['Hall', 'Crypt', 'Vault'], tip: 'Open floor.', cells: () => [] },
   // five stones wide, solid rock down both sides
   {
     noun: ['Gallery', 'Passage'],
+    tip: 'A narrow way.',
     cells: () => {
       const out: [number, number][] = [];
       for (let r = 0; r < ROWS - 2; r++) out.push([0, r], [COLS - 1, r]);
@@ -29,17 +32,19 @@ const SHAPES: readonly Shape[] = [
   // four pillars hold up the ceiling
   {
     noun: ['Colonnade', 'Cloister'],
+    tip: 'Pillars ahead.',
     cells: (_m, rand) => (rand() < 0.5 ? [[1, 2], [5, 2], [1, 5], [5, 5]] : [[2, 2], [4, 2], [2, 5], [4, 5]]),
   },
   // the walls pinch in at the middle
-  { noun: ['Narrows', 'Throat'], cells: () => [[0, 3], [0, 4], [0, 5], [1, 4], [6, 3], [6, 4], [6, 5], [5, 4]] },
+  { noun: ['Narrows', 'Throat'], tip: 'Walls close in.', cells: () => [[0, 3], [0, 4], [0, 5], [1, 4], [6, 3], [6, 4], [6, 5], [5, 4]] },
   // a wall down the middle: left or right?
-  { noun: ['Chapel', 'Divide'], cells: () => [[3, 3], [3, 4], [3, 5]] },
+  { noun: ['Chapel', 'Divide'], tip: 'Left or right?', cells: () => [[3, 3], [3, 4], [3, 5]] },
   // a corner caved in
-  { noun: ['Ossuary', 'Cellar'], cells: (m) => mirrorCells([[0, 0], [1, 0], [0, 1], [1, 1], [0, 2]], m) },
+  { noun: ['Ossuary', 'Cellar'], tip: 'Caved-in corner.', cells: (m) => mirrorCells([[0, 0], [1, 0], [0, 1], [1, 1], [0, 2]], m) },
   // rubble from a collapse, heaped against the sides
   {
     noun: ['Ruin', 'Collapse'],
+    tip: 'Mind the rubble.',
     cells: (m, rand) => {
       const left = 1 + Math.floor(rand() * 3);
       const right = 4 + Math.floor(rand() * 2);
@@ -76,5 +81,5 @@ export const roomPlan = (day: number, rand: () => number): RoomPlan => {
   for (const [c, r] of shape.cells(mirror, rand)) if (!keepOpen(c, r)) walls[idx(c, r)] = true;
   const noun = shape.noun[Math.floor(rand() * shape.noun.length)] ?? shape.noun[0]!;
   const adjective = ADJECTIVES[Math.floor(rand() * ADJECTIVES.length)] ?? ADJECTIVES[0]!;
-  return { walls, name: `The ${adjective} ${noun}` };
+  return { walls, name: `The ${adjective} ${noun}`, tip: shape.tip };
 };
