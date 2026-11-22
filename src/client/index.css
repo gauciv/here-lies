@@ -346,8 +346,9 @@ body {
   margin: 4px 0 0;
   font-family: 'Jacquard 24', var(--font);
   font-weight: 400;
-  font-size: 92px;
+  font-size: clamp(56px, 22vw, 92px);
   line-height: 0.95;
+  white-space: nowrap;
   color: #e0b46a;
   text-shadow: 0 3px 0 #3a1d0e, 0 0 18px rgba(224, 140, 60, 0.25);
   -webkit-font-smoothing: none;
@@ -427,7 +428,7 @@ body {
 @container (max-height: 330px) { .scroll { scale: 0.56; } }
 .btn-enter { font-size: 18px; padding: 3px 14px 5px; }
 .standby-compact { gap: 4px; padding: 6px 8px 10px; }
-.standby-compact .camp-title { font-size: 64px; margin: 0; }
+.standby-compact .camp-title { font-size: clamp(48px, 17vw, 64px); margin: 0; }
 .standby-compact .camp-room { font-size: 15px; letter-spacing: 2px; }
 
 .screen-fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 0.4s steps(6); z-index: 50; }
