@@ -31,3 +31,24 @@ export const CANDLE_OUT_LEGEND: Record<string, ColorKey> = {
 export const SPEAKER_ON = ['...k....', '..kk.y..', 'kkkk..y.', 'kkkk.y.y', 'kkkk.y.y', 'kkkk..y.', '..kk.y..', '...k....'] as const;
 export const SPEAKER_OFF = ['...k....', '..kk....', 'kkkk.r.r', 'kkkk..r.', 'kkkk..r.', 'kkkk.r.r', '..kk....', '...k....'] as const;
 export const SPEAKER_LEGEND: Record<string, ColorKey> = { k: 'bone2', y: 'warm4', r: 'red2' };
+
+// ── streak flame (9 wide, 11 tall) ──
+export const FLAME = [
+  '....o....',
+  '...oo....',
+  '...oyo...',
+  '..oyyo.o.',
+  '..oyWyoo.',
+  '.oyyWWyo.',
+  '.oyWWWyo.',
+  'oyyWWWyyo',
+  'oyyWWWyyo',
+  '.oyyWyyo.',
+  '..ooooo..',
+] as const;
+export const FLAME_LEGEND: Record<string, ColorKey> = { o: 'red1', y: 'warm4', W: 'warm6' };
+
+// ── ink marks for the parchment: a skull and a doorway (7 wide) ──
+export const SKULL_INK = ['.kkkkk.', 'kkkkkkk', 'k..k..k', 'kkkkkkk', '.kk.kk.', '.k.k.k.'] as const;
+export const DOOR_INK = ['..kkk..', '.k...k.', 'k.....k', 'k.....k', 'k...k.k', 'k.....k', 'kkkkkkk'] as const;
+export const INK_LEGEND: Record<string, ColorKey> = { k: 'warm0' };

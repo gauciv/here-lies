@@ -27,7 +27,7 @@ const open = (e: MouseEvent, walkIn: boolean) => {
   }
 };
 
-/** The feed post: the standby room, with your record on the parchment. */
+/** The feed post: the standby room, with your guide to the day's room on a scroll. */
 export const Splash = () => {
   const [init, setInit] = useState<InitResponse | null>(null);
 

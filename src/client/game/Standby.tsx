@@ -1,21 +1,13 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
-import { CANDLES_PER_DAY, dayStartUtc, difficultyOf } from '../../shared/board';
+import { difficultyOf } from '../../shared/board';
 import type { DayDto, MeDto } from '../../shared/api';
-import { pioneerTitle } from '../../shared/pioneer';
+import { loadApi } from '../api';
 import { CAMP_H, CAMP_W, CampScene, type CampCue } from '../engine/camp';
-import { dateLabel } from './format';
+import { DOOR_INK, FLAME, FLAME_LEGEND, INK_LEGEND, SKULL_INK } from './icons';
+import { PixelIcon } from './PixelIcon';
+import { RoomMap } from './RoomMap';
 
 export type StandbyHandle = { enter: (onDone: () => void, onCue?: (cue: CampCue) => void) => void };
-
-const useCountdown = (day: number): string => {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = window.setInterval(() => setNow(Date.now()), 30_000);
-    return () => window.clearInterval(t);
-  }, []);
-  const ms = Math.max(0, dayStartUtc(day + 1) - now);
-  return `${Math.floor(ms / 3_600_000)}h ${Math.floor((ms % 3_600_000) / 60_000).toString().padStart(2, '0')}m`;
-};
 
 /** The resting room, scaled to whole pixels so the art stays crisp. */
 const CampCanvas = forwardRef<StandbyHandle, { maxScale?: number }>(({ maxScale = 4 }, ref) => {
@@ -55,45 +47,55 @@ const CampCanvas = forwardRef<StandbyHandle, { maxScale?: number }>(({ maxScale 
 });
 CampCanvas.displayName = 'CampCanvas';
 
-const status = (me: MeDto): string => {
-  if (me.crossed) return me.pioneer !== null ? `You crossed today · ${pioneerTitle(me.pioneer)}, ${me.pioneer}%` : 'You crossed today.';
-  if (me.candles <= 0) return 'Your candles are spent for today.';
-  if (me.uncarved !== null) return 'Your ghost waits to carve its arrow.';
-  if (me.candles < CANDLES_PER_DAY) return `You have ${me.candles} of ${CANDLES_PER_DAY} candles left.`;
-  return 'The door is waiting. Three candles, one crossing.';
-};
+type Snapshot = { day: DayDto; graves: number[] };
 
-/** Your record, kept on a parchment you open when you want it. */
-const Record = ({ day, me, finished, onHide }: { day: DayDto | null; me: MeDto | null; finished: boolean; onHide: () => void }) => {
-  const countdown = useCountdown(day?.day ?? 1);
-  const diff = day ? difficultyOf(day.day) : null;
-  const tier = diff?.name ?? '';
+/**
+ * The dwarf's guide to today's room, on a scroll that unrolls when asked for:
+ * the day, how hard it is, a rough map, and how many have fallen or crossed.
+ * It's read fresh every time it opens.
+ */
+const Record = ({ day, me }: { day: DayDto | null; me: MeDto | null }) => {
+  const [snap, setSnap] = useState<Snapshot | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void loadApi()
+      .then((api) => api.init())
+      .then((res) => { if (alive) setSnap({ day: res.day, graves: res.graves.filter((g) => g.top).map((g) => g.i) }); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
+  const d = snap?.day ?? day;
+  const diff = d ? difficultyOf(d.day) : null;
+  const streak = me?.streak ?? 0;
   return (
-    <section className="parchment" id="camp-record" aria-label="Your record">
-      {day && (
-        <>
-          <p className="parch-line">Day {day.day} · {dateLabel(day.day)}</p>
-          <p className="parch-room">{day.room}</p>
-          <p className="parch-line">
-            <b className={`parch-tier parch-${tier.toLowerCase()}`}>{tier}</b>{diff ? ` · ${diff.hint}` : ''}
-          </p>
-        </>
-      )}
-      {me && (
-        <p className="parch-streak">
-          {me.streak > 0 ? (
-            <><span className="parch-big">{me.streak}</span> day streak{me.bestStreak > me.streak ? ` · best ${me.bestStreak}` : ''}</>
-          ) : me.bestStreak > 0 ? (
-            <>Streak broken · best {me.bestStreak}. Cross today to start anew.</>
-          ) : (
-            <>No streak yet. Cross today to begin one.</>
+    <section className="scroll" id="camp-record" aria-label="Your guide to today's room">
+      <div className="scroll-sheet">
+        <div className="scroll-inner">
+          <header className="rec-head">
+            <p className="rec-day">{d ? `Day ${d.day}` : '…'}</p>
+            <p className={`rec-streak${streak ? '' : ' is-cold'}`} aria-label={`${streak} day streak`}>
+              <PixelIcon rows={FLAME} legend={FLAME_LEGEND} size={2} />
+              <span>{streak}</span>
+            </p>
+          </header>
+          {diff && (
+            <div className="rec-tier">
+              <p className={`rec-tier-name rec-${diff.name.toLowerCase()}`}>{diff.name}</p>
+              <p className="rec-hint">{diff.hint}</p>
+            </div>
           )}
-        </p>
-      )}
-      {day && <p className="parch-line">Today {day.fallen} fell · {day.crossed} crossed</p>}
-      {me && <p className="parch-status">{status(me)}</p>}
-      {finished && <p className="parch-note">New room in {countdown}</p>}
-      <button className="btn btn-hide" onClick={onHide}>Hide</button>
+          <figure className="rec-map">
+            {d && <figcaption>{d.room}</figcaption>}
+            {d && snap ? <RoomMap day={d.day} graves={snap.graves} /> : <div className="room-map room-map-wait" />}
+          </figure>
+          {d && (
+            <footer className="rec-foot">
+              <span><PixelIcon rows={SKULL_INK} legend={INK_LEGEND} size={2} /> {d.fallen} fell</span>
+              <span><PixelIcon rows={DOOR_INK} legend={INK_LEGEND} size={2} /> {d.crossed} crossed</span>
+            </footer>
+          )}
+        </div>
+      </div>
     </section>
   );
 };
@@ -112,7 +114,7 @@ export const Standby = forwardRef<StandbyHandle, {
       <h1 className="camp-title">Here Lies</h1>
       <div className="camp-middle">
         <CampCanvas ref={ref} maxScale={compact ? 3 : 4} />
-        {open && <Record day={day} me={me} finished={finished} onHide={() => setOpen(false)} />}
+        {open && <Record day={day} me={me} />}
       </div>
       <div className="camp-actions">
         {finished ? (
