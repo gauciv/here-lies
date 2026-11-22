@@ -70,7 +70,7 @@ api.post('/carve', async (c) => {
     const body = await readBody(c);
     const i = Number(body.i);
     if (!Number.isInteger(i)) throw new GameError('Unknown grave');
-    return c.json(await engine.carve(dayFrom(body), await username(), i, body.text));
+    return c.json(await engine.carve(dayFrom(body), await username(), i, body.arrow));
   } catch (e) {
     return fail(c, e);
   }
