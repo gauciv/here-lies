@@ -1,5 +1,4 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
-import { difficultyOf } from '../../shared/board';
 import type { DayDto, MeDto } from '../../shared/api';
 import { loadApi } from '../api';
 import { CAMP_H, CAMP_W, CampScene, type CampCue } from '../engine/camp';
@@ -101,18 +100,11 @@ export const Standby = forwardRef<StandbyHandle, {
 }>(({ day, me, busy, onEnter, onReview, compact = false }, ref) => {
   const [open, setOpen] = useState(false);
   const finished = !!me && (me.crossed || me.candles <= 0) && me.uncarved === null;
-  const diff = day ? difficultyOf(day.day) : null;
   return (
     <div className={`standby${compact ? ' standby-compact' : ''}`}>
       <header className="camp-head">
         <h1 className="camp-title">Here Lies</h1>
         {day && <p className="camp-room">{day.room}</p>}
-        {diff && (
-          <p className="camp-tier">
-            <b className={`camp-tier-name tier-${diff.name.toLowerCase()}`}>{diff.name}</b>
-            <span className="camp-hint">{diff.hint}</span>
-          </p>
-        )}
       </header>
       <div className="camp-middle">
         <CampCanvas ref={ref} maxScale={compact ? 3 : 4} />

@@ -66,11 +66,16 @@ body {
 .hud {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
-  gap: 12px;
-  padding: 12px 14px 6px;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 6px;
 }
 .hud-brand, .hud-right { display: flex; flex-direction: column; gap: 3px; }
+.hud-brand { min-width: 0; flex: 1; }
+/* the day's tier on one line: a bold pixel stamp, then a hand-written aside */
+.hud-tier { margin: 0; display: flex; align-items: baseline; gap: 8px; min-width: 0; white-space: nowrap; line-height: 1; }
+.hud-tier-name { flex: none; font-size: 17px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; text-shadow: 2px 2px 0 #1a0e08; }
+.hud-hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-family: 'Caveat', cursive; font-size: 20px; color: #b9a689; }
 .hud-right { align-items: flex-end; }
 .logo {
   margin: 0;
@@ -83,7 +88,7 @@ body {
   text-shadow: 2px 2px 0 var(--warm2), 0 0 12px rgba(255, 210, 122, 0.18);
 }
 .candles { display: flex; gap: 4px; }
-.hud-row { display: flex; align-items: center; gap: 12px; }
+.hud-row { display: flex; align-items: center; gap: 9px; }
 .help {
   width: 26px; height: 26px; padding: 0; cursor: pointer;
   font: 600 15px/1 var(--font); color: var(--tab-stone-h);
@@ -344,13 +349,9 @@ body {
 .camp-head { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
 /* the room: plain pixel capitals, spaced like a carved plaque */
 .camp-room { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; color: var(--bone3); line-height: 1.1; }
-/* the tier: a small coloured stamp; its hint in a hand-written aside */
-.camp-tier { margin: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 2px 8px; line-height: 1.1; }
-.camp-tier-name { font-size: 13px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; }
 .tier-gentle { color: #8fb86a; }
 .tier-tricky { color: #e0a24a; }
 .tier-cruel { color: #e0574a; }
-.camp-hint { font-family: 'Caveat', cursive; font-size: 21px; color: #b9a689; }
 .camp-middle { position: relative; flex: 1; min-height: 0; width: 100%; display: flex; container-type: size; }
 .camp-stage { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; }
 .camp-actions { display: flex; flex-direction: column; align-items: center; gap: 8px; }
@@ -394,7 +395,7 @@ body {
 .standby-compact { gap: 4px; padding: 6px 8px 10px; }
 .standby-compact .camp-title { font-size: 64px; margin: 0; }
 .standby-compact .camp-room { font-size: 15px; letter-spacing: 2px; }
-.standby-compact .camp-hint { font-size: 18px; }
+
 .screen-fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 0.4s steps(6); z-index: 50; }
 .screen-fade.on { opacity: 1; }
 .camp-corner { position: absolute; top: 10px; right: 12px; display: flex; gap: 10px; z-index: 5; }

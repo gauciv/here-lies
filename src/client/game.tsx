@@ -108,7 +108,7 @@ export const App = () => {
 
   return (
     <main className="app">
-      {s.me ? <Hud me={s.me} onHelp={openHelp} /> : <header className="hud"><h1 className="logo">Here Lies</h1></header>}
+      {s.me ? <Hud me={s.me} day={s.day?.day ?? null} onHelp={openHelp} /> : <header className="hud" />}
       <Stage scene={scene} onTap={tap} onFallDone={onFallDone} onCrossDone={onCrossDone}>
         {s.me && s.day && !s.fading && (
           <div className={`card-layer ${s.player.r >= 4 && s.phase !== 'crossed' ? 'card-layer-top' : ''}`}>

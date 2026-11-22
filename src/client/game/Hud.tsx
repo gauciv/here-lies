@@ -1,4 +1,5 @@
 import type { MeDto } from '../../shared/api';
+import { difficultyOf } from '../../shared/board';
 import { PixelIcon } from './PixelIcon';
 import { useState } from 'react';
 import { SPEAKER_LEGEND, SPEAKER_OFF, SPEAKER_ON } from './icons';
@@ -19,10 +20,21 @@ export const MuteButton = () => {
   );
 };
 
-export const Hud = ({ me, onHelp }: { me: MeDto; onHelp: () => void }) => (
+/** The day's difficulty: a coloured stamp, and a hand-written line on how it plays. */
+export const DayTier = ({ day }: { day: number }) => {
+  const diff = difficultyOf(day);
+  return (
+    <p className="hud-tier">
+      <b className={`hud-tier-name tier-${diff.name.toLowerCase()}`}>{diff.name}</b>
+      <span className="hud-hint">{diff.hint}</span>
+    </p>
+  );
+};
+
+export const Hud = ({ me, day, onHelp }: { me: MeDto; day: number | null; onHelp: () => void }) => (
   <header className="hud">
     <div className="hud-brand">
-      <h1 className="logo">Here Lies</h1>
+      {day !== null && <DayTier day={day} />}
     </div>
     <div className="hud-right">
       <div className="hud-row">
