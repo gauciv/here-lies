@@ -127,7 +127,9 @@ export const GraveCard = ({ grave, me, board, judged, onClose }: {
           <li className={`tag ${truth ? 'tag-true' : 'tag-lie'}`}>{truth ? `True · saved ${top.saved}` : `Lie · fooled ${top.fooled}`}</li>
         )}
         <li className="tag">{grave.falls} fell here</li>
-        <li className={`tag${left <= 2 ? ' tag-worn' : ''}`}>Crumbles in {left}</li>
+        <li className={`tag${left <= 2 ? ' tag-worn' : ''}`}>
+          {left <= 1 ? 'Crumbles under the next walker' : `Crumbles after ${left} more walkers`}
+        </li>
       </ul>
     </section>
   );
