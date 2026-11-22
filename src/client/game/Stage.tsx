@@ -57,7 +57,7 @@ export const Stage = ({ scene, onTap, onFallDone, onCrossDone, children }: Props
           className="scene"
           style={{ width: SCENE_W * scale, height: SCENE_H * scale }}
           role="img"
-          aria-label="The crossing: a grid of dark stones. Tap a stone next to your lantern to step onto it."
+          aria-label="The crossing: a grid of dark stones. Tap a stone next to the dwarf to step onto it."
           onPointerDown={(e) => {
             const cell = engine.current?.tileAt(e.clientX, e.clientY);
             if (cell) onTap(cell);

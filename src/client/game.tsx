@@ -23,7 +23,8 @@ export const App = () => {
         mine: g.mine,
       });
     });
-    return { board: s.board, revealed: s.revealed, player: s.player, graves, phase: s.phase };
+    const revealAll = s.phase === 'crossed' || s.phase === 'idle';
+    return { board: s.board, revealed: s.revealed, player: s.player, graves, phase: s.phase, revealAll };
   }, [s.board, s.revealed, s.player, s.graves, s.phase]);
 
   if (s.status === 'error') {
@@ -55,7 +56,7 @@ export const App = () => {
         )}
         {s.toast && <div className="toast" role="status">{s.toast}</div>}
       </Stage>
-      <footer className="hint" aria-live="polite">{s.status === 'loading' ? 'Lighting the lantern…' : hint}</footer>
+      <footer className="hint" aria-live="polite">{s.status === 'loading' ? 'Lighting the torch…' : hint}</footer>
     </main>
   );
 };

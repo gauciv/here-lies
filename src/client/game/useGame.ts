@@ -3,7 +3,7 @@ import { START, generateBoard, idx, isStep, type Board, type Cell } from '../../
 import type { EpitaphId } from '../../shared/epitaphs';
 import type { CrossResponse, DayDto, EpitaphDto, FallResponse, GraveDto, MeDto, Vote } from '../../shared/api';
 import { loadApi, type GameApi } from '../api';
-import type { Phase } from '../engine/scene';
+import { isLit, type Phase } from '../engine/scene';
 
 export type Card =
   | { kind: 'none' }
@@ -115,14 +115,17 @@ export const useGame = () => {
     if (!board || !day || card.kind === 'carve') return;
     const i = idx(cell.c, cell.r);
     const g = graves.get(i);
-    if (g && (g.carved > 0 || g.falls > 0) && !(phase === 'walking' && isStep(player, cell) && g.carved === 0)) {
+    const darkLifted = phase === 'crossed' || phase === 'idle';
+    const canSee = darkLifted || isLit(player, cell);
+    // graves can only be read where the torch (or the dawn) shows them
+    if (g && canSee && (g.carved > 0 || g.falls > 0) && !(phase === 'walking' && isStep(player, cell) && g.carved === 0)) {
       void openGrave(i);
       return;
     }
     if (card.kind !== 'none') setS((p) => ({ ...p, card: { kind: 'none' } }));
     if (phase !== 'walking') return;
     if (!isStep(player, cell)) {
-      if (card.kind === 'none') toast('Step onto a stone next to your lantern.');
+      if (card.kind === 'none') toast('Step onto a stone next to you.');
       return;
     }
     const api = apiRef.current;
@@ -214,11 +217,12 @@ export const useGame = () => {
     if (s.status !== 'ready') return '';
     if (s.phase === 'falling') return 'The stone gives way…';
     if (s.phase === 'crossing') return 'The gate opens.';
-    if (s.phase !== 'walking') return s.graves.size ? 'Tap a grave to read its last words.' : '';
+    if (s.phase === 'crossed' || s.phase === 'idle') return s.graves.size ? 'The dark has lifted. Tap any grave to judge it.' : '';
+    if (s.phase !== 'walking') return '';
     const seen = s.revealed.size;
     if (seen <= 1 && s.walkedThisRun === 0) return 'Tap a glowing stone to step.';
     if (seen <= 3) return 'A number counts the pits touching that stone.';
-    if (s.graves.size && seen <= 6) return 'Blue lights are graves. Tap one to read it.';
+    if (s.graves.size && seen <= 6) return 'Graves mark where others fell. Tap one in your light.';
     return 'Reach the far wall.';
   }, [s.status, s.phase, s.revealed.size, s.walkedThisRun, s.graves.size]);
 
