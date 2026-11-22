@@ -2,7 +2,7 @@ import './index.css';
 
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { CarveCard, CrossedCard, FellAgainCard, GraveCard, IntroCard, SpentCard } from './game/Cards';
+import { CarveCard, CrossedCard, FellAgainCard, GameOverCard, GraveCard, IntroCard, SpentCard } from './game/Cards';
 import { Hud, MuteButton } from './game/Hud';
 import { Standby, type StandbyHandle } from './game/Standby';
 import { sound } from './engine/sound';
@@ -31,11 +31,12 @@ export const App = () => {
   const [entering, setEntering] = useState(false);
   const standby = useRef<StandbyHandle>(null);
   const autoEnter = useRef(consumeAutoEnter());
-  const { s, tap, onFallDone, onCrossDone, carve, selectArrow, skip, share, join, flair, walkAgain, openResult, startPlaying, openHelp, closeCard, hint } = useGame();
+  const { s, tap, onFallDone, onCrossDone, carve, selectArrow, skip, share, join, flair, walkAgain, leaveRun, openResult, startPlaying, openHelp, closeCard, hint } = useGame();
 
   const scene = useMemo<SceneState | null>(() => {
     if (!s.board) return null;
-    const revealAll = s.phase === 'crossed' || s.phase === 'idle';
+    // the dark lifts once the run is over, but not while your ghost is still mourning itself
+    const revealAll = (s.phase === 'crossed' || s.phase === 'idle') && s.card.kind !== 'gameOver';
     const board = s.board;
     const graves = new Map<number, GraveView>();
     s.graves.forEach((g) => {
@@ -54,7 +55,7 @@ export const App = () => {
     return {
       board: s.board, revealed: s.revealed, player: s.player, graves, knownPits, phase: s.phase, revealAll,
       // your ghost lingers in its pit while you carve, or until you respawn
-      ghost: carving !== null || s.card.kind === 'fellAgain',
+      ghost: carving !== null || s.card.kind === 'fellAgain' || s.card.kind === 'gameOver',
       carvePreview: carving !== null ? { stone: carving, dir: s.carveDir } : null,
       fading: s.fading,
     };
@@ -112,12 +113,13 @@ export const App = () => {
       {s.me ? <Hud me={s.me} day={s.day?.day ?? null} onHelp={openHelp} /> : <header className="hud" />}
       <Stage scene={scene} onTap={tap} onFallDone={onFallDone} onCrossDone={onCrossDone}>
         {s.me && s.day && !s.fading && (
-          <div className={`card-layer ${s.player.r >= 4 && s.phase !== 'crossed' && card.kind !== 'fellAgain' ? 'card-layer-top' : ''}`}>
+          <div className={`card-layer ${s.player.r >= 4 && s.phase !== 'crossed' && card.kind !== 'fellAgain' && card.kind !== 'gameOver' ? 'card-layer-top' : ''}`}>
             {card.kind === 'grave' && grave && s.board && (
               <GraveCard grave={grave} me={s.me} board={s.board} judged={s.phase === 'crossed' || s.phase === 'idle'} onClose={closeCard} />
             )}
             {card.kind === 'intro' && <IntroCard onStart={startPlaying} />}
-            {card.kind === 'fellAgain' && <FellAgainCard me={s.me} reason={card.reason} onWalk={walkAgain} />}
+            {card.kind === 'fellAgain' && <FellAgainCard me={s.me} onWalk={walkAgain} />}
+            {card.kind === 'gameOver' && <GameOverCard onCamp={() => { leaveRun(); crossFade('camp'); }} />}
             {card.kind === 'carve' && s.board && (
               <CarveCard
                 me={s.me} board={s.board} stone={cellOf(card.i)} selected={s.carveDir}

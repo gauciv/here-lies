@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CANDLES_PER_DAY, dayStartUtc } from '../../shared/board';
-import { CRUMBLE_AFTER, arrowIsTrue, directionName, isForgotten, validDirections, type Direction } from '../../shared/epitaphs';
+import { arrowIsTrue, directionName, isForgotten, validDirections, type Direction } from '../../shared/epitaphs';
 import type { Board, Cell } from '../../shared/board';
 import { arrowRows } from '../engine/sprites';
 import type { ColorKey } from '../engine/palette';
@@ -78,7 +78,7 @@ const ArrowRecord = ({ mine }: { mine: MyArrowDto }) => (
     <span className="slab-arrow slab-arrow-sm"><Arrow dir={mine.arrow} color={mine.truthful ? 'warm4' : 'red2'} size={3} /></span>
     <p className="card-meta">
       Your arrow {mine.truthful ? 'told the truth' : 'lied'}{mine.crumbled ? ` and has crumbled after ${times(mine.visits)}` : ''}.{' '}
-      {mine.truthful
+      {mine.waiting ? 'It still waits beneath another slab.' : mine.truthful
         ? mine.saved ? `It saved ${times(mine.saved)}.` : mine.crumbled ? 'Nobody heeded it.' : 'Nobody has heeded it yet.'
         : mine.fooled ? `It fooled ${times(mine.fooled)}.` : mine.crumbled ? 'Nobody fell for it.' : 'Nobody has fallen for it yet.'}
     </p>
@@ -111,7 +111,6 @@ export const GraveCard = ({ grave, me, board, judged, onClose }: {
   const top = grave.top;
   const truth = top && judged ? arrowIsTrue(board, grave.i, top.arrow) : null;
   if (!top) return null;
-  const left = Math.max(1, CRUMBLE_AFTER - top.visits);
   return (
     <section className="card card-grave" aria-label="Grave slab">
       <button className="card-close" onClick={onClose} aria-label="Close">×</button>
@@ -122,29 +121,31 @@ export const GraveCard = ({ grave, me, board, judged, onClose }: {
           <p className="epitaph">“The pit is {directionName(top.arrow)}.”</p>
         </div>
       </div>
-      <ul className="tags" aria-label="About this slab">
-        {truth !== null && (
-          <li className={`tag ${truth ? 'tag-true' : 'tag-lie'}`}>{truth ? `True · saved ${top.saved}` : `Lie · fooled ${top.fooled}`}</li>
-        )}
-        <li className="tag">{grave.falls} fell here</li>
-        <li className={`tag${left <= 2 ? ' tag-worn' : ''}`}>
-          {left <= 1 ? 'Crumbles under the next walker' : `Crumbles after ${left} more walkers`}
-        </li>
-      </ul>
+      {truth !== null && (
+        <ul className="tags" aria-label="About this slab">
+          <li className={`tag ${truth ? 'tag-true' : 'tag-lie'}`}>{truth ? 'It told the truth' : 'It lied'}</li>
+        </ul>
+      )}
     </section>
   );
 };
 
 /** You fell, but this fall can't carve: say why, then send them back to the stairs. */
 /** A death with nothing to carve: your ghost in its pit, the dark all around, and a way back. */
-export const FellAgainCard = ({ me, reason, onWalk }: { me: MeDto; reason: 'carvedToday' | 'stoneTaken'; onWalk: () => void }) => (
+export const FellAgainCard = ({ me, onWalk }: { me: MeDto; onWalk: () => void }) => (
   <section className="death" aria-label="You died">
     <p className="death-title">You died.</p>
-    <p className="death-note">
-      {reason === 'carvedToday' ? 'Your one arrow is already carved today.' : 'That stone already bears an arrow.'}
-      {' '}{me.candles} of {CANDLES_PER_DAY} candles left.
-    </p>
+    <p className="death-note">Your one arrow is already carved today. {me.candles} of {CANDLES_PER_DAY} candles left.</p>
     <button className="btn btn-share" onClick={onWalk}>Respawn</button>
+  </section>
+);
+
+/** The last candle is out: the same quiet death, and the way back to camp. */
+export const GameOverCard = ({ onCamp }: { onCamp: () => void }) => (
+  <section className="death" aria-label="Your candles are spent">
+    <p className="death-title">You died.</p>
+    <p className="death-note">Your last candle is out. The room will wait for you at camp.</p>
+    <button className="btn btn-share" onClick={onCamp}>Back to camp</button>
   </section>
 );
 
@@ -171,6 +172,7 @@ export const CarveCard = ({ me, board, stone, fellToward, selected, onSelect, on
       <p className="carve-title">You died.</p>
       <p className="carve-what">
         Your arrow is for those who come after. Point it at your pit to warn them, or anywhere else to fool them.
+        {me.uncarvedQueued && ' This stone already bears an arrow; yours will wait beneath it until that one crumbles.'}
       </p>
       <div className="compass" role="group" aria-label="Choose an arrow">
         {COMPASS.map((d, k) =>
@@ -202,9 +204,7 @@ export const CarveCard = ({ me, board, stone, fellToward, selected, onSelect, on
       <p className="card-foot carve-rules">
         {me.uncarvedSkippable
           ? 'One arrow a day. Skip to save it for a later death; your last candle must carve.'
-          : me.uncarvedReplaces
-            ? 'Your last candle must leave an arrow. This stone already has one: yours replaces it.'
-            : 'This is your last candle, so you must leave your arrow.'}
+          : 'This is your last candle, so you must leave your arrow.'}
       </p>
     </section>
   );

@@ -133,7 +133,8 @@ void test('pioneer score rewards crossing before others map the pits', async () 
   const late = await e.cross(DAY, 'late', crossPath);
   assert.ok(late.me.pioneer !== null && late.me.pioneer < 100);
   // your own falls never count against you
-  await e.fall(DAY, 'solo', pitPath);
+  const soloFall = await e.fall(DAY, 'solo', pitPath);
+  if (soloFall.me.uncarved !== null) await e.skip(DAY, 'solo', soloFall.me.uncarved);
   const solo = await e.cross(DAY, 'solo', crossPath);
   assert.equal(solo.me.pioneer, late.me.pioneer);
 });
@@ -147,7 +148,7 @@ void test('logged-out placeholders can never act, and real names are never mista
   assert.equal(real.me.crossed, true);
 });
 
-void test('one arrow per stone, first come; one carving per player per day', async () => {
+void test('one arrow shown per stone, first come; later carvings wait beneath it', async () => {
   const e = new Engine(new MemoryStore());
   const first = await e.fall(DAY, 'ann', pitPath);
   assert.equal(first.me.uncarved, first.grave.i);
@@ -155,14 +156,32 @@ void test('one arrow per stone, first come; one carving per player per day', asy
   // ann's second fall: she already carved today
   const again = await e.fall(DAY, 'ann', pitPath);
   assert.equal(again.me.uncarved, null);
-  // ben falls from the same stone: it already has an arrow
+  // ben falls from the same stone: it already has an arrow, so his would wait beneath it
   const ben = await e.fall(DAY, 'ben', pitPath);
-  assert.equal(ben.me.uncarved, null);
+  assert.equal(ben.me.uncarved, first.grave.i);
+  assert.equal(ben.me.uncarvedQueued, true);
   assert.equal(ben.grave.falls, 3);
   assert.equal(ben.grave.top?.user, 'ann');
-  // ben's carving is still unused, so he can carve on a fresh stone later
-  const otherPit = board.pits.findIndex((p, i) => p && i !== idx(pitPath.at(-1)!.c, pitPath.at(-1)!.r) && neighbors(i % COLS, Math.floor(i / COLS)).some((n) => !board.pits[idx(n.c, n.r)]));
-  assert.ok(otherPit >= 0);
+  const carved = await e.carve(DAY, 'ben', ben.grave.i, arrowFor(ben.grave.i));
+  assert.equal(carved.grave.top?.user, 'ann', 'the shown arrow does not change');
+  assert.equal(carved.me.myArrow?.waiting, true);
+});
+
+void test('when a slab crumbles, the arrow waiting beneath it rises silently', async () => {
+  const e = new Engine(new MemoryStore());
+  const f = await e.fall(DAY, 'first', pitPath);
+  await e.carve(DAY, 'first', f.grave.i, arrowFor(f.grave.i));
+  const q = await e.fall(DAY, 'second', pitPath);
+  const lie = validDirections(board, cellOf(q.grave.i)).find((d) => d !== arrowFor(q.grave.i))!;
+  await e.carve(DAY, 'second', q.grave.i, lie);
+  // second's own fall already stood on the slab once; four more walkers break it
+  for (let k = 0; k < 4; k++) await e.fall(DAY, `walker${k}`, pitPath);
+  const init = await e.init(DAY, 'second', 't3_x');
+  const slab = init.graves.find((g) => g.i === f.grave.i);
+  assert.equal(slab?.top?.user, 'second', 'the waiting arrow took the stone');
+  assert.equal(slab?.top?.arrow, lie);
+  assert.equal(slab?.top?.visits, 0, 'it starts fresh, uncracked');
+  assert.equal(init.me.myArrow?.waiting, false);
 });
 
 void test('arrows earn saved and fooled credit from later walkers', async () => {
@@ -191,19 +210,21 @@ void test('carving can be skipped until the last candle, which must carve', asyn
   const other = await e.fall(DAY, 'other', pitPath);
   assert.equal(other.me.uncarved, stone(f1));
   await e.carve(DAY, 'other', stone(other), arrowFor(stone(other)));
-  // sky's second fall: same stone, now taken, candles remain → nothing to carve
+  // sky's second fall: same stone, now taken: sky may carve (it would wait beneath) or skip
   const f2 = await e.fall(DAY, 'sky', pitPath);
-  assert.equal(f2.me.uncarved, null);
-  // sky's last candle must carve: the taken stone's arrow will be replaced
+  assert.equal(f2.me.uncarved, stone(f2));
+  assert.equal(f2.me.uncarvedQueued, true);
+  await e.skip(DAY, 'sky', stone(f2));
+  // sky's last candle must carve; the stone is taken, so the arrow waits beneath
   const f3 = await e.fall(DAY, 'sky', pitPath);
   assert.equal(f3.me.uncarved, stone(f3));
   assert.equal(f3.me.uncarvedSkippable, false);
-  assert.equal(f3.me.uncarvedReplaces, true);
+  assert.equal(f3.me.uncarvedQueued, true);
   await assert.rejects(e.skip(DAY, 'sky', stone(f3)), /last candle/);
   await e.carve(DAY, 'sky', stone(f3), arrowFor(stone(f3)));
   const init = await e.init(DAY, 'other', 't3_x');
-  assert.equal(init.graves.find((g) => g.i === stone(f3))?.top?.user, 'sky');
-  assert.equal(init.me.myArrow?.crumbled, true, "the replaced arrow crumbled but kept its record");
+  assert.equal(init.graves.find((g) => g.i === stone(f3))?.top?.user, 'other', "the shown arrow stays until it crumbles");
+  assert.equal(init.me.myArrow?.crumbled, false);
 });
 
 void test('a slab crumbles after five walkers stand on it', async () => {
@@ -226,10 +247,10 @@ void test('concurrent skip and carve requests settle a fall exactly once', async
   const i = f.grave.i;
   const results = await Promise.allSettled([e.skip(DAY, 'racer', i), e.skip(DAY, 'racer', i), e.carve(DAY, 'racer', i, arrowFor(i))]);
   assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
-  // the stone's claim never went negative: exactly one later faller can carve it if it was released
+  // the stone's claim never went negative: at most one later faller holds the stone itself
   const a = await e.fall(DAY, 'next1', pitPath);
   const b = await e.fall(DAY, 'next2', pitPath);
-  assert.ok([a.me.uncarved, b.me.uncarved].filter((x) => x !== null).length <= 1);
+  assert.ok([a.me, b.me].filter((m) => m.uncarved !== null && !m.uncarvedQueued).length <= 1);
 });
 
 void test('rejects forged runs', async () => {

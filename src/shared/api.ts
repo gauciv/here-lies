@@ -43,6 +43,8 @@ export type MyArrowDto = {
   fooled: number;
   visits: number;
   crumbled: boolean;
+  /** still waiting beneath another arrow on its stone */
+  waiting: boolean;
 };
 
 export type MeDto = {
@@ -56,8 +58,8 @@ export type MeDto = {
   uncarved: number | null;
   /** the pending carving may be skipped (not your last candle) */
   uncarvedSkippable: boolean;
-  /** the pending carving replaces an arrow already on that stone */
-  uncarvedReplaces: boolean;
+  /** the stone already bears an arrow: the pending carving will wait beneath it */
+  uncarvedQueued: boolean;
   /** pits this player has fallen into today (their own hard-won knowledge) */
   fellInto: number[];
   streak: number;
@@ -80,8 +82,8 @@ export type InitResponse = {
 
 export type RunRequest = { day: number; path: Cell[] };
 
-export type FallResponse = { type: 'fall'; me: MeDto; grave: GraveDto; day: DayDto };
-export type CrossResponse = { type: 'cross'; me: MeDto; day: DayDto };
+export type FallResponse = { type: 'fall'; me: MeDto; grave: GraveDto; day: DayDto; graves: GraveDto[] };
+export type CrossResponse = { type: 'cross'; me: MeDto; day: DayDto; graves: GraveDto[] };
 
 export type CarveRequest = { day: number; i: number; arrow: Direction };
 export type CarveResponse = { type: 'carve'; grave: GraveDto; me: MeDto };

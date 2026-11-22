@@ -13,7 +13,8 @@ export type Card =
   | { kind: 'intro' }
   | { kind: 'grave'; i: number }
   | { kind: 'carve'; i: number }
-  | { kind: 'fellAgain'; reason: 'carvedToday' | 'stoneTaken' }
+  | { kind: 'fellAgain' }
+  | { kind: 'gameOver' }
   | { kind: 'crossed' }
   | { kind: 'spent' };
 
@@ -83,6 +84,7 @@ export const useGame = () => {
   }, []);
 
   /** Only slabs that carry an arrow are on the board; blank ones stay hidden. */
+  const allGraves = (list: GraveDto[]) => new Map(list.map((g) => [g.i, g]));
   const putGrave = (graves: Map<number, GraveDto>, g: GraveDto) => {
     const next = new Map(graves);
     if (g.top) next.set(g.i, g);
@@ -184,22 +186,11 @@ export const useGame = () => {
       revealed.add(i);
       return { ...p, player: cell, revealed, phase: crossing ? 'crossing' : 'walking', walkedThisRun: p.walkedThisRun + 1 };
     });
-    // stepping onto someone else's slab wears it; the fifth walker breaks it
+    // stepping onto someone else's slab cracks it a little more. It never breaks in
+    // front of you: whether it crumbled (and what rose in its place) only shows
+    // once the server answers at the end of the run
     if (g && g.top && !crossing && !alreadyStoodHere && g.top.user !== s.me?.username) {
-      const visits = g.top.visits + 1;
-      if (visits >= CRUMBLE_AFTER) {
-        window.setTimeout(() => {
-          sound.play('crumble');
-          toast('The slab crumbles to dust.');
-          setS((p) => {
-            const graves = new Map(p.graves);
-            graves.delete(i);
-            return { ...p, graves, card: p.card.kind === 'grave' && p.card.i === i ? { kind: 'none' } : p.card };
-          });
-        }, 220);
-        return;
-      }
-      const worn: GraveDto = { ...g, top: { ...g.top, visits } };
+      const worn: GraveDto = { ...g, top: { ...g.top, visits: Math.min(CRUMBLE_AFTER - 1, g.top.visits + 1) } };
       setS((p) => ({ ...p, graves: putGrave(p.graves, worn) }));
     }
     // stepping onto a slab reads it
@@ -228,11 +219,11 @@ export const useGame = () => {
       const card: Card = res.me.uncarved !== null
         ? { kind: 'carve', i: res.grave.i }
         : res.me.candles <= 0
-          ? { kind: 'spent' }
-          : { kind: 'fellAgain', reason: res.me.myArrow ? 'carvedToday' : 'stoneTaken' };
+          ? { kind: 'gameOver' }
+          : { kind: 'fellAgain' };
       const phase: Phase = res.me.uncarved === null && res.me.candles <= 0 ? 'idle' : 'fallen';
       // the ghost lingers over the pit where it died
-      setS((p) => ({ ...p, me: res.me, day: res.day, graves: putGrave(p.graves, res.grave), phase, card, carveDir: null }));
+      setS((p) => ({ ...p, me: res.me, day: res.day, graves: allGraves(res.graves), phase, card, carveDir: null }));
     } catch (e) {
       toast(e instanceof Error ? e.message : 'The dark swallowed that step.');
       setS((p) => resetRun(p));
@@ -244,7 +235,7 @@ export const useGame = () => {
       const res = await pendingCross.current;
       if (!res) return;
       sound.play('victory');
-      setS((p) => ({ ...p, me: res.me, day: res.day, phase: 'crossed', card: { kind: 'crossed' } }));
+      setS((p) => ({ ...p, me: res.me, day: res.day, graves: allGraves(res.graves), phase: 'crossed', card: { kind: 'crossed' } }));
     } catch (e) {
       toast(e instanceof Error ? e.message : 'The gate would not open.');
       setS((p) => resetRun(p));
@@ -259,7 +250,7 @@ export const useGame = () => {
       sound.play('carve');
       const res = await api.carve(day.day, card.i, arrow);
       if (res.me.candles > 0) respawn((p) => ({ ...p, me: res.me, graves: putGrave(p.graves, res.grave) }));
-      else setS((p) => ({ ...p, me: res.me, graves: putGrave(p.graves, res.grave), phase: 'idle', card: { kind: 'spent' } }));
+      else setS((p) => ({ ...p, me: res.me, graves: putGrave(p.graves, res.grave), phase: 'idle', card: { kind: 'gameOver' } }));
     } catch (e) {
       toast(e instanceof Error ? e.message : 'The chisel slipped. Try again.');
     }
@@ -331,6 +322,7 @@ export const useGame = () => {
 
   const hint = useMemo(() => {
     if (s.status !== 'ready') return '';
+    if (s.card.kind === 'gameOver' || s.card.kind === 'fellAgain') return ''; // the death screen speaks for itself
     if (s.phase === 'falling') return 'The stone gives way…';
     if (s.phase === 'crossing') return 'The gate opens.';
     if (s.phase === 'crossed' || s.phase === 'idle') return s.graves.size ? 'The dark has lifted. Tap a slab to see if its arrow lied.' : '';
@@ -340,7 +332,7 @@ export const useGame = () => {
     if (seen <= 3) return 'A number counts the pits touching that stone.';
     if (s.graves.size && seen <= 6) return 'A slab marks where someone stood before they fell. Its arrow may lie.';
     return 'Find the door in the far wall.';
-  }, [s.status, s.phase, s.revealed.size, s.walkedThisRun, s.graves.size]);
+  }, [s.status, s.card.kind, s.phase, s.revealed.size, s.walkedThisRun, s.graves.size]);
 
   const startPlaying = useCallback(() => {
     markIntroSeen();
@@ -360,5 +352,10 @@ export const useGame = () => {
     if (s.card.kind === 'fellAgain') respawn();
   }, [s.card.kind, respawn]);
 
-  return { s, tap, onFallDone, onCrossDone, carve, selectArrow, skip, share, join, flair, walkAgain, openResult, startPlaying, openHelp, closeCard, hint };
+  /** Leave the game-over screen; the room stays revealed for when you come back to review it. */
+  const leaveRun = useCallback(() => {
+    setS((p) => (p.card.kind === 'gameOver' ? { ...p, card: { kind: 'none' } } : p));
+  }, []);
+
+  return { s, tap, onFallDone, onCrossDone, carve, selectArrow, skip, share, join, flair, walkAgain, leaveRun, openResult, startPlaying, openHelp, closeCard, hint };
 };

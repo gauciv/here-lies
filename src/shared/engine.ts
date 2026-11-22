@@ -31,7 +31,7 @@ export type Store = {
 export class GameError extends Error {}
 
 /** Bump when the stored shape changes, so old days don't mix with new rules. */
-const NS = 'v5:';
+const NS = 'v6:';
 
 const K = {
   stats: (d: number) => `${NS}d:${d}:stats`,
@@ -43,6 +43,8 @@ const K = {
   slabArrow: (d: number) => `${NS}d:${d}:slabarrow`,
   /** stone → claim counter (first claimant carves) */
   slabClaim: (d: number) => `${NS}d:${d}:slabclaim`,
+  /** `${stone}:${epId}` → 1 while an arrow waits beneath a slab, 2 once it has risen */
+  slabQueue: (d: number) => `${NS}d:${d}:slabqueue`,
   ep: (d: number, id: string) => `${NS}d:${d}:ep:${id}`,
   epSeq: (d: number) => `${NS}d:${d}:epseq`,
   user: (d: number, u: string) => `${NS}d:${d}:u:${u}`,
@@ -99,6 +101,7 @@ export class Engine {
       fooled: num(e.fooled),
       visits: num(e.visits),
       crumbled: e.crumbled === '1',
+      waiting: e.queued === '1',
     };
   }
 
@@ -115,7 +118,7 @@ export class Engine {
       revealed: parseList(u.revealed),
       uncarved: u.uncarved ? num(u.uncarved) : null,
       uncarvedSkippable: u.uncarvedSkippable === '1',
-      uncarvedReplaces: u.uncarvedReplaces === '1',
+      uncarvedQueued: u.uncarvedQueued === '1',
       fellInto: parseList(u.fellAt),
       streak: last >= day - 1 ? num(st.count) : 0,
       bestStreak: Math.max(num(st.best), last >= day - 1 ? num(st.count) : 0),
@@ -155,13 +158,38 @@ export class Engine {
     };
   }
 
-  /** The slab's arrow crumbles: it leaves the board, keeps its record, and frees the stone. */
-  private async crumble(day: number, stone: number, epId: string): Promise<void> {
+  /**
+   * The slab's arrow crumbles. If another arrow waits beneath it, that one rises
+   * in its place without a sound, so nobody can tell the slab changed hands;
+   * otherwise the stone is freed. The safety cap crumbles without promoting
+   * (it must actually thin the board); the queue then waits for the next slab.
+   */
+  private async crumble(day: number, stone: number, epId: string, promote = true): Promise<void> {
     await this.store.hSet(K.ep(day, epId), { crumbled: '1' });
-    if ((await this.store.hGet(K.slabArrow(day), String(stone))) === epId) {
-      await this.store.hSet(K.slabArrow(day), { [String(stone)]: '' });
-      await this.store.hSet(K.slabClaim(day), { [String(stone)]: '0' });
+    if ((await this.store.hGet(K.slabArrow(day), String(stone))) !== epId) return;
+    const next = promote ? await this.riseFromQueue(day, stone) : null;
+    if (next) {
+      await this.store.hSet(K.slabArrow(day), { [String(stone)]: next });
+      return;
     }
+    await this.store.hSet(K.slabArrow(day), { [String(stone)]: '' });
+    await this.store.hSet(K.slabClaim(day), { [String(stone)]: '0' });
+  }
+
+  /** Take the oldest arrow waiting beneath this stone, atomically; null if none. */
+  private async riseFromQueue(day: number, stone: number): Promise<string | null> {
+    const queue = await this.store.hGetAll(K.slabQueue(day));
+    const waiting = Object.entries(queue)
+      .filter(([field, v]) => v === '1' && field.startsWith(`${stone}:`))
+      .map(([field]) => field.slice(String(stone).length + 1))
+      .sort((a, b) => Number(a) - Number(b));
+    for (const id of waiting) {
+      // 1 → 2 claims it; a racing crumble that sees 3 moves on
+      if ((await this.store.hIncrBy(K.slabQueue(day), `${stone}:${id}`, 1)) !== 2) continue;
+      await this.store.hSet(K.ep(day, id), { queued: '0', at: String(Date.now()) });
+      return id;
+    }
+    return null;
   }
 
   private async writeArrow(day: number, stone: number, fields: Record<string, string>): Promise<string> {
@@ -172,8 +200,16 @@ export class Engine {
     const active = Object.entries(await this.store.hGetAll(K.slabArrow(day))).filter(([, v]) => v);
     if (active.length > MAX_ARROWS) {
       const [oldStone, oldId] = active.sort((x, y) => Number(x[1]) - Number(y[1]))[0]!;
-      await this.crumble(day, Number(oldStone), oldId);
+      await this.crumble(day, Number(oldStone), oldId, false);
     }
+    return id;
+  }
+
+  /** An arrow carved on a taken stone: it waits, unseen, beneath the slab above it. */
+  private async queueArrow(day: number, stone: number, fields: Record<string, string>): Promise<string> {
+    const id = String(await this.store.incrBy(K.epSeq(day), 1));
+    await this.store.hSet(K.ep(day, id), { ...fields, i: String(stone), saved: '0', fooled: '0', visits: '0', queued: '1' });
+    await this.store.hSet(K.slabQueue(day), { [`${stone}:${id}`]: '1' });
     return id;
   }
 
@@ -222,15 +258,15 @@ export class Engine {
 
   async init(day: number, user: string, postId: string): Promise<InitResponse> {
     await this.ensureSeeded(day);
-    // only slabs that still carry an arrow are on the board
+    const [dayDto, me, graves] = await Promise.all([this.dayDto(day), this.me(day, user), this.graves(day, user)]);
+    return { type: 'init', postId, day: dayDto, graves, me };
+  }
+
+  /** Every slab that still carries an arrow (only these are on the board). */
+  private async graves(day: number, viewer: string): Promise<GraveDto[]> {
     const arrows = await this.store.hGetAll(K.slabArrow(day));
     const cells = Object.entries(arrows).filter(([, id]) => id).map(([cell]) => Number(cell));
-    const [dayDto, me, graves] = await Promise.all([
-      this.dayDto(day),
-      this.me(day, user),
-      Promise.all(cells.map((i) => this.grave(day, i, user))),
-    ]);
-    return { type: 'init', postId, day: dayDto, graves, me };
+    return Promise.all(cells.map((i) => this.grave(day, i, viewer)));
   }
 
   /**
@@ -286,20 +322,18 @@ export class Engine {
   }
 
   /**
-   * Decide what this fall may carve, atomically. Each player carves once a day,
-   * one arrow per stone, first come. Your last candle must carve: if the stone
-   * is taken, your arrow will replace the one there.
+   * Decide what this fall may carve, atomically. Each player carves once a day.
+   * The first to fall from a stone carves its slab; anyone after them can still
+   * carve, and their arrow waits hidden beneath it until the slab above crumbles.
    */
-  private async claimCarving(day: number, user: string, stone: number, lastCandle: boolean): Promise<'carve' | 'replace' | 'none'> {
+  private async claimCarving(day: number, user: string, stone: number): Promise<'carve' | 'queue' | 'none'> {
     if ((await this.store.hIncrBy(K.user(day, user), 'carveClaim', 1)) > 1) {
       await this.store.hIncrBy(K.user(day, user), 'carveClaim', -1);
       return 'none';
     }
     if ((await this.store.hIncrBy(K.slabClaim(day), String(stone), 1)) === 1) return 'carve';
     await this.store.hIncrBy(K.slabClaim(day), String(stone), -1);
-    if (lastCandle) return 'replace';
-    await this.store.hIncrBy(K.user(day, user), 'carveClaim', -1); // their carving is still unused
-    return 'none';
+    return 'queue';
   }
 
   async fall(day: number, user: string, rawPath: unknown): Promise<FallResponse> {
@@ -320,7 +354,7 @@ export class Engine {
     }
     await this.recordPath(day, user, path);
     const lastCandle = spent >= CANDLES_PER_DAY;
-    const carving = await this.claimCarving(day, user, stone, lastCandle);
+    const carving = await this.claimCarving(day, user, stone);
     const u = await this.store.hGetAll(K.user(day, user));
     const fellAt = parseList(u.fellAt);
     fellAt.push(pit);
@@ -334,7 +368,7 @@ export class Engine {
               uncarvedStep: String(outcome.steps),
               uncarvedSkippable: lastCandle ? '0' : '1',
               uncarvedToken: String(spent),
-              uncarvedReplaces: carving === 'replace' ? '1' : '0',
+              uncarvedQueued: carving === 'queue' ? '1' : '0',
             }
           : {}),
         fellAt: JSON.stringify(fellAt),
@@ -344,8 +378,8 @@ export class Engine {
       this.store.hIncrBy(K.slabFalls(day), String(stone), 1),
       this.store.hIncrBy(K.stats(day), 'fallen', 1),
     ]);
-    const [meDto, grave, dayDto] = await Promise.all([this.me(day, user), this.grave(day, stone, user), this.dayDto(day)]);
-    return { type: 'fall', me: meDto, grave, day: dayDto };
+    const [meDto, grave, dayDto, graves] = await Promise.all([this.me(day, user), this.grave(day, stone, user), this.dayDto(day), this.graves(day, user)]);
+    return { type: 'fall', me: meDto, grave, day: dayDto, graves };
   }
 
   async carve(day: number, user: string, i: number, arrow: unknown): Promise<CarveResponse> {
@@ -356,13 +390,12 @@ export class Engine {
     // carve and skip race for the same one-time token; only the first wins
     if (!(await this.store.hSetNX(K.user(day, user), `resolved:${u.uncarvedToken ?? ''}`, 'carve'))) throw new GameError('This fall is already settled');
     if (!(await this.store.hSetNX(K.user(day, user), 'carved', '1'))) throw new GameError('Your arrow is already carved');
-    if (u.uncarvedReplaces === '1') {
-      const old = await this.store.hGet(K.slabArrow(day), String(i));
-      if (old) await this.crumble(day, i, old);
-      await this.store.hSet(K.slabClaim(day), { [String(i)]: '1' });
-    }
-    const id = await this.writeArrow(day, i, { user, arrow: String(arrow), step: u.uncarvedStep ?? '0', at: String(Date.now()) });
-    await this.store.hSet(K.user(day, user), { uncarved: '', uncarvedStep: '', uncarvedSkippable: '', uncarvedReplaces: '', myEp: id });
+    const fields = { user, arrow: String(arrow), step: u.uncarvedStep ?? '0', at: String(Date.now()) };
+    // a queued carving takes the stone after all if its slab crumbled meanwhile
+    const queued = u.uncarvedQueued === '1' && (await this.store.hIncrBy(K.slabClaim(day), String(i), 1)) !== 1;
+    if (u.uncarvedQueued === '1' && queued) await this.store.hIncrBy(K.slabClaim(day), String(i), -1);
+    const id = queued ? await this.queueArrow(day, i, fields) : await this.writeArrow(day, i, fields);
+    await this.store.hSet(K.user(day, user), { uncarved: '', uncarvedStep: '', uncarvedSkippable: '', uncarvedQueued: '', myEp: id });
     const [grave, me] = await Promise.all([this.grave(day, i, user), this.me(day, user)]);
     return { type: 'carve', grave, me };
   }
@@ -373,10 +406,10 @@ export class Engine {
     if (!u.uncarved || num(u.uncarved) !== i) throw new GameError('Nothing to carve here');
     if (u.uncarvedSkippable !== '1') throw new GameError('Your last candle must leave an arrow');
     if (!(await this.store.hSetNX(K.user(day, user), `resolved:${u.uncarvedToken ?? ''}`, 'skip'))) throw new GameError('This fall is already settled');
-    // release both claims so the stone, and your one carving, stay available
-    await this.store.hIncrBy(K.slabClaim(day), String(i), -1);
+    // release your claims so the stone (if you held it) and your one carving stay available
+    if (u.uncarvedQueued !== '1') await this.store.hIncrBy(K.slabClaim(day), String(i), -1);
     await this.store.hIncrBy(K.user(day, user), 'carveClaim', -1);
-    await this.store.hSet(K.user(day, user), { uncarved: '', uncarvedStep: '', uncarvedSkippable: '', uncarvedReplaces: '' });
+    await this.store.hSet(K.user(day, user), { uncarved: '', uncarvedStep: '', uncarvedSkippable: '', uncarvedQueued: '' });
     return { type: 'skip', me: await this.me(day, user) };
   }
 
@@ -415,8 +448,8 @@ export class Engine {
       const count = last === day - 1 ? num(st.count) + 1 : last === day ? num(st.count) : 1;
       await this.store.hSet(K.streak(user), { last: String(day), count: String(count), best: String(Math.max(count, num(st.best))) });
     }
-    const [me, dayDto] = await Promise.all([this.me(day, user), this.dayDto(day)]);
-    return { type: 'cross', me, day: dayDto };
+    const [me, dayDto, graves] = await Promise.all([this.me(day, user), this.dayDto(day), this.graves(day, user)]);
+    return { type: 'cross', me, day: dayDto, graves };
   }
 
   /** The flair a player has earned today (only after crossing). */
