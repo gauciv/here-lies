@@ -11,7 +11,7 @@ import { useGame } from './game/useGame';
 import type { GraveView, SceneState } from './engine/scene';
 
 export const App = () => {
-  const { s, tap, onFallDone, onCrossDone, carve, skip, share, join, flair, walkAgain, startPlaying, openHelp, closeCard, hint } = useGame();
+  const { s, tap, onFallDone, onCrossDone, carve, selectArrow, skip, share, join, flair, walkAgain, startPlaying, openHelp, closeCard, hint } = useGame();
 
   const scene = useMemo<SceneState | null>(() => {
     if (!s.board) return null;
@@ -30,8 +30,13 @@ export const App = () => {
       });
     });
     const knownPits = new Set(s.me?.fellInto ?? []);
-    return { board: s.board, revealed: s.revealed, player: s.player, graves, knownPits, phase: s.phase, revealAll };
-  }, [s.board, s.revealed, s.player, s.graves, s.phase, s.me]);
+    const carving = s.card.kind === 'carve' ? s.card.i : null;
+    return {
+      board: s.board, revealed: s.revealed, player: s.player, graves, knownPits, phase: s.phase, revealAll,
+      ghost: carving !== null,
+      carvePreview: carving !== null ? { stone: carving, dir: s.carveDir } : null,
+    };
+  }, [s.board, s.revealed, s.player, s.graves, s.phase, s.me, s.card, s.carveDir]);
 
   if (s.status === 'error') {
     return (
@@ -58,7 +63,11 @@ export const App = () => {
             {card.kind === 'intro' && <IntroCard onStart={startPlaying} />}
             {card.kind === 'fellAgain' && <FellAgainCard me={s.me} reason={card.reason} onWalk={walkAgain} />}
             {card.kind === 'carve' && (
-              <CarveCard me={s.me} step={carveStep} stone={cellOf(card.i)} fellToward={directionBetween(cellOf(card.i), s.player)} onCarve={carve} onSkip={skip} />
+              <CarveCard
+                me={s.me} step={carveStep} stone={cellOf(card.i)} selected={s.carveDir}
+                fellToward={s.me.fellInto.length ? directionBetween(cellOf(card.i), cellOf(s.me.fellInto[s.me.fellInto.length - 1]!)) : null}
+                onSelect={selectArrow} onCarve={carve} onSkip={skip}
+              />
             )}
             {card.kind === 'crossed' && <CrossedCard me={s.me} day={s.day} onClose={closeCard} onShare={share} onJoin={join} onFlair={flair} />}
             {card.kind === 'spent' && <SpentCard me={s.me} day={s.day} onClose={closeCard} onShare={share} onJoin={join} />}

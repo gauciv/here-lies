@@ -94,6 +94,8 @@ export const Splash = () => {
       player: START,
       graves,
       knownPits: new Set<number>(),
+      ghost: false,
+      carvePreview: null,
       phase: 'walking',
       revealAll: false,
     };

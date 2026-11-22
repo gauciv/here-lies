@@ -164,15 +164,23 @@ export const FellAgainCard = ({ me, reason, onWalk }: { me: MeDto; reason: 'carv
 /** Compass layout: grid position → direction (null = the slab itself). */
 const COMPASS: readonly (Direction | null)[] = [7, 0, 1, 6, null, 2, 5, 4, 3];
 
-export const CarveCard = ({ me, step, stone, fellToward, onCarve, onSkip }: {
-  me: MeDto; step: number | null; stone: Cell; fellToward: Direction | null; onCarve: (d: Direction) => void; onSkip: () => void;
+/**
+ * Carving, docked so the board stays visible: your ghost stands on the slab,
+ * picking an arrow previews it on the board, and "Carve" makes it final.
+ */
+export const CarveCard = ({ me, step, stone, fellToward, selected, onSelect, onCarve, onSkip }: {
+  me: MeDto; step: number | null; stone: Cell; fellToward: Direction | null; selected: Direction | null;
+  onSelect: (d: Direction) => void; onCarve: (d: Direction) => void; onSkip: () => void;
 }) => {
   const [busy, setBusy] = useState(false);
   const valid = validDirections(stone);
+  const told = selected === null ? null : selected === fellToward ? 'the truth' : 'a lie';
   return (
-    <section className="card card-carve" aria-label="Carve your arrow">
-      <p className="card-kicker">{me.uncarvedSkippable ? 'Here lies you' : 'Your last candle'}{step ? ` · step ${step}` : ''}</p>
-      <p className="epitaph">{fellToward !== null ? `You fell ${directionName(fellToward)}.` : 'The stone gave way.'}</p>
+    <section className="card card-carve card-dock" aria-label="Carve your arrow">
+      <p className="card-kicker">
+        {me.uncarvedSkippable ? 'You died' : 'Your last candle'}{step ? ` on step ${step}` : ''}
+        {fellToward !== null ? ` · you fell ${directionName(fellToward)}` : ''}
+      </p>
       <div className="carve-body">
         <div className="compass" role="group" aria-label="Choose an arrow">
           {COMPASS.map((d, k) =>
@@ -181,10 +189,11 @@ export const CarveCard = ({ me, step, stone, fellToward, onCarve, onSkip }: {
             ) : (
               <button
                 key={k}
-                className={`btn btn-compass${d === fellToward ? ' is-truth' : ''}`}
+                className={`btn btn-compass${d === selected ? ' is-picked' : d === fellToward ? ' is-truth' : ''}`}
                 disabled={busy || !valid.includes(d)}
-                aria-label={`Carve an arrow pointing ${directionName(d)}${d === fellToward ? ' (the truth)' : ''}`}
-                onClick={() => { setBusy(true); onCarve(d); }}
+                aria-pressed={d === selected}
+                aria-label={`Aim the arrow ${directionName(d)}${d === fellToward ? ' (the truth)' : ''}`}
+                onClick={() => onSelect(d)}
               >
                 <Arrow dir={d} color={valid.includes(d) ? 'ink' : 'pst2'} size={3} />
               </button>
@@ -193,18 +202,21 @@ export const CarveCard = ({ me, step, stone, fellToward, onCarve, onSkip }: {
         </div>
         <div className="carve-side">
           <p className="card-meta">
-            {me.uncarvedReplaces
-              ? 'This stone already has an arrow. Yours replaces it.'
-              : 'Carve an arrow where you stood. Point at the pit, or lie.'}
+            {selected === null
+              ? me.uncarvedReplaces
+                ? 'This stone has an arrow. Yours replaces it. Pick a direction.'
+                : 'Pick where your arrow points, or tap a stone next to your grave.'
+              : `“The pit is ${directionName(selected)}.” That's ${told}.`}
           </p>
-          {me.uncarvedSkippable ? (
-            <>
-              <button className="btn" disabled={busy} onClick={() => { setBusy(true); onSkip(); }}>Skip for now</button>
-              <p className="card-foot">One arrow a day. Your last candle must carve.</p>
-            </>
-          ) : (
-            <p className="card-foot">You must leave your mark.</p>
-          )}
+          <div className="vote-row">
+            <button className="btn btn-share" disabled={busy || selected === null} onClick={() => { if (selected === null) return; setBusy(true); onCarve(selected); }}>
+              Carve
+            </button>
+            {me.uncarvedSkippable && (
+              <button className="btn" disabled={busy} onClick={() => { setBusy(true); onSkip(); }}>Skip</button>
+            )}
+          </div>
+          <p className="card-foot">{me.uncarvedSkippable ? 'One arrow a day. Your last candle must carve.' : 'You must leave your mark.'}</p>
         </div>
       </div>
     </section>

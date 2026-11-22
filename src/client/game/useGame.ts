@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { START, cellOf, generateBoard, idx, isStep, type Board, type Cell } from '../../shared/board';
-import { CRUMBLE_AFTER, type Direction } from '../../shared/epitaphs';
+import { CRUMBLE_AFTER, directionBetween, validDirections, type Direction } from '../../shared/epitaphs';
 import type { CrossResponse, DayDto, FallResponse, GraveDto, MeDto } from '../../shared/api';
 import { loadApi, type GameApi } from '../api';
 import { isLit, type Phase } from '../engine/scene';
@@ -28,6 +28,8 @@ export type GameState = {
   card: Card;
   toast: string | null;
   walkedThisRun: number;
+  /** the arrow being considered while carving (not yet confirmed) */
+  carveDir: Direction | null;
 };
 
 const startIdx = idx(START.c, START.r);
@@ -67,6 +69,7 @@ export const useGame = () => {
     card: { kind: 'none' },
     toast: null,
     walkedThisRun: 0,
+    carveDir: null,
   });
 
   const toast = useCallback((msg: string) => {
@@ -103,7 +106,8 @@ export const useGame = () => {
           graves: new Map(init.graves.map((g) => [g.i, g])),
           revealed: new Set([startIdx, ...me.revealed]),
           // mid-carve on reload: stand in the pit you fell into, so the true direction is known
-          player: me.uncarved !== null && me.fellInto.length ? cellOf(me.fellInto[me.fellInto.length - 1]!) : me.crossed ? { c: 3, r: 0 } : START,
+          // mid-carve on reload: the ghost stands on its slab
+          player: me.uncarved !== null ? cellOf(me.uncarved) : me.crossed ? { c: 3, r: 0 } : START,
           phase,
           card,
         }));
@@ -120,7 +124,13 @@ export const useGame = () => {
 
   const tap = useCallback((cell: Cell) => {
     const { board, phase, card, player, graves, day } = s;
-    if (!board || !day || card.kind === 'carve') return;
+    if (!board || !day) return;
+    // carving: tapping a stone next to your slab aims the arrow at it
+    if (card.kind === 'carve') {
+      const d = directionBetween(cellOf(card.i), cell);
+      if (d !== null && validDirections(cellOf(card.i)).includes(d)) setS((p) => ({ ...p, carveDir: d }));
+      return;
+    }
     const i = idx(cell.c, cell.r);
     const g = graves.get(i);
     const darkLifted = phase === 'crossed' || phase === 'idle';
@@ -188,7 +198,7 @@ export const useGame = () => {
 
   const resetRun = (p: GameState): GameState => {
     path.current = [];
-    return { ...p, player: START, phase: 'walking', card: { kind: 'none' }, walkedThisRun: 0 };
+    return { ...p, player: START, phase: 'walking', card: { kind: 'none' }, walkedThisRun: 0, carveDir: null };
   };
 
   const onFallDone = useCallback(async () => {
@@ -202,7 +212,8 @@ export const useGame = () => {
           ? { kind: 'spent' }
           : { kind: 'fellAgain', reason: res.me.myArrow ? 'carvedToday' : 'stoneTaken' };
       const phase: Phase = res.me.uncarved === null && res.me.candles <= 0 ? 'idle' : 'fallen';
-      setS((p) => ({ ...p, me: res.me, day: res.day, graves: putGrave(p.graves, res.grave), phase, card }));
+      // when carving, the ghost floats back to the slab it fell from
+      setS((p) => ({ ...p, me: res.me, day: res.day, graves: putGrave(p.graves, res.grave), phase, card, carveDir: null, player: card.kind === 'carve' ? cellOf(res.grave.i) : p.player }));
     } catch (e) {
       toast(e instanceof Error ? e.message : 'The dark swallowed that step.');
       setS((p) => resetRun(p));
@@ -235,6 +246,10 @@ export const useGame = () => {
       toast(e instanceof Error ? e.message : 'The chisel slipped. Try again.');
     }
   }, [s, toast]);
+
+  const selectArrow = useCallback((d: Direction) => {
+    setS((p) => (p.card.kind === 'carve' ? { ...p, carveDir: d } : p));
+  }, []);
 
   const skip = useCallback(async () => {
     const api = apiRef.current;
@@ -317,5 +332,5 @@ export const useGame = () => {
     setS((p) => (p.card.kind === 'fellAgain' ? resetRun(p) : p));
   }, []);
 
-  return { s, tap, onFallDone, onCrossDone, carve, skip, share, join, flair, walkAgain, startPlaying, openHelp, closeCard, hint };
+  return { s, tap, onFallDone, onCrossDone, carve, selectArrow, skip, share, join, flair, walkAgain, startPlaying, openHelp, closeCard, hint };
 };
