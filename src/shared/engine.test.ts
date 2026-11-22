@@ -95,6 +95,20 @@ void test('concurrent falls cannot overspend candles', async () => {
   assert.ok(init.me.candles >= 0);
 });
 
+void test('sharing: only after the run, once, and a failed post can be retried', async () => {
+  const e = new Engine(new MemoryStore());
+  await assert.rejects(e.claimShare(DAY, 'sam'), /Finish/);
+  await e.cross(DAY, 'sam', crossPath);
+  const text = await e.claimShare(DAY, 'sam');
+  assert.match(text, /Crossed the dark/);
+  await assert.rejects(e.claimShare(DAY, 'sam'), /already/);
+  await e.confirmShare(DAY, 'sam', false);
+  await e.claimShare(DAY, 'sam');
+  const me = await e.confirmShare(DAY, 'sam', true);
+  assert.equal(me.shared, true);
+  await assert.rejects(e.claimShare(DAY, 'sam'), /already/);
+});
+
 void test('rejects forged runs', async () => {
   const e = new Engine(new MemoryStore());
   await assert.rejects(e.cross(DAY, 'dave', [{ c: 3, r: 0 }]), GameError);

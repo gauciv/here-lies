@@ -40,6 +40,8 @@ export type MeDto = {
   /** a fall waiting for last words (cell index) */
   uncarved: number | null;
   streak: number;
+  /** already posted today's result as a comment */
+  shared: boolean;
 };
 
 export type InitResponse = {
@@ -62,5 +64,8 @@ export type VoteRequest = { day: number; id: string; vote: Vote };
 export type VoteResponse = { type: 'vote'; epitaph: EpitaphDto; grave: GraveDto };
 
 export type GraveResponse = { type: 'grave'; grave: GraveDto; epitaphs: EpitaphDto[] };
+
+export type ShareResponse = { type: 'share'; me: MeDto };
+export type JoinResponse = { type: 'join' };
 
 export type ErrorResponse = { status: 'error'; message: string };

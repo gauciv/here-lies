@@ -2,6 +2,7 @@
 // runs this against Redis; the local preview runs it against an in-memory map.
 import { CANDLES_PER_DAY, ROWS, cellOf, dayNumber, generateBoard, idx, judgeRun, mulberry32, neighbors, type Cell } from './board';
 import { EPITAPHS, FORGOTTEN, isEpitaphId } from './epitaphs';
+import { canShare, shareText } from './share';
 import type {
   CarveResponse,
   CrossResponse,
@@ -96,6 +97,7 @@ export class Engine {
       revealed: parseList(u.revealed),
       uncarved: u.uncarved ? num(u.uncarved) : null,
       streak: last >= day - 1 ? num(st.count) : 0,
+      shared: u.shared === '1',
     };
   }
 
@@ -289,6 +291,25 @@ export class Engine {
     const [epitaph, grave] = await Promise.all([this.epitaph(day, id, user), this.grave(day, i, user)]);
     if (!epitaph) throw new GameError('No such epitaph');
     return { type: 'vote', epitaph, grave };
+  }
+
+  /** Claim today's single share; returns the comment text to post. */
+  async claimShare(day: number, user: string): Promise<string> {
+    const me = await this.me(day, user);
+    if (!canShare(me)) throw new GameError('Finish your crossing first');
+    // atomic claim: only one concurrent request can hold it
+    if ((await this.store.hIncrBy(K.user(day, user), 'shareClaim', 1)) > 1) {
+      await this.store.hIncrBy(K.user(day, user), 'shareClaim', -1);
+      throw new GameError('You already shared today');
+    }
+    return shareText(day, me);
+  }
+
+  /** Record the outcome; a failed post releases the claim so the player can retry. */
+  async confirmShare(day: number, user: string, ok: boolean): Promise<MeDto> {
+    if (ok) await this.store.hSet(K.user(day, user), { shared: '1' });
+    else await this.store.hIncrBy(K.user(day, user), 'shareClaim', -1);
+    return this.me(day, user);
   }
 
   async graveDetail(day: number, user: string, i: number): Promise<GraveResponse> {
