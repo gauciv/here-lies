@@ -5,6 +5,8 @@ import type { CrossResponse, DayDto, FallResponse, GraveDto, MeDto } from '../..
 import { loadApi, type GameApi } from '../api';
 import { isLit, type Phase } from '../engine/scene';
 import { sound } from '../engine/sound';
+import { navigateTo } from '@devvit/web/client';
+import { subredditName } from './reddit';
 
 export type Card =
   | { kind: 'none' }
@@ -299,8 +301,13 @@ export const useGame = () => {
     try {
       await api.join();
       return true;
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not join right now.');
+    } catch {
+      // Until the app is approved, Reddit only lets its owner join from inside the
+      // game. Everyone else gets the subreddit opened, where Join is one tap away.
+      const sub = subredditName();
+      if (!sub) { toast('Could not join right now.'); return false; }
+      toast(`Opening r/${sub}. Tap Join there.`);
+      navigateTo(`https://www.reddit.com/r/${sub}/`);
       return false;
     }
   }, [toast]);

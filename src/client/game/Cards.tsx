@@ -8,15 +8,7 @@ import { PixelIcon } from './PixelIcon';
 import type { DayDto, GraveDto, MeDto, MyArrowDto } from '../../shared/api';
 import { shareText } from '../../shared/share';
 import { pioneerTitle } from '../../shared/pioneer';
-import { context } from '@devvit/web/client';
-
-const subredditName = (): string | null => {
-  try {
-    return context.subredditName ?? null;
-  } catch {
-    return null; // local preview has no Reddit context
-  }
-};
+import { subredditName } from './reddit';
 
 type Social = { onShare: () => Promise<boolean>; onJoin: () => Promise<boolean> };
 
