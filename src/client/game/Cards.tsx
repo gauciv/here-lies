@@ -9,6 +9,8 @@ import type { DayDto, GraveDto, MeDto, MyArrowDto } from '../../shared/api';
 import { shareText } from '../../shared/share';
 import { pioneerTitle } from '../../shared/pioneer';
 import { subredditName } from './reddit';
+import { TileIcon } from './TileIcon';
+import { CANDLE_LEGEND, CANDLE_LIT } from './icons';
 
 type Social = { onShare: () => Promise<boolean>; onJoin: () => Promise<boolean> };
 
@@ -251,12 +253,13 @@ export const IntroCard = ({ onStart }: { onStart: () => void }) => (
     <p className="card-kicker">How it works</p>
     <p className="epitaph">Cross the dark.</p>
     <ol className="intro-steps">
-      <li><span className="intro-icon intro-num">2</span><span>A number counts the pits touching that stone.</span></li>
-      <li><span className="intro-icon slab-arrow slab-arrow-sm"><Arrow dir={1} color="pst1" size={3} /></span><span>The fallen carve an arrow toward their pit. Some lie.</span></li>
-      <li><span className="intro-icon intro-door" aria-hidden="true" /><span>Find the door hidden somewhere in the far wall. You have 3 candles.</span></li>
+      <li><span className="intro-icon"><TileIcon kind="number" /></span><span>A number counts the pits around that stone, diagonals too.</span></li>
+      <li><span className="intro-icon"><TileIcon kind="slab" /></span><span>The fallen leave a slab with an arrow toward their pit. Some lie.</span></li>
+      <li><span className="intro-icon"><TileIcon kind="door" scale={1} /></span><span>Find the door hidden in the far wall. It moves every day.</span></li>
+      <li><span className="intro-icon"><PixelIcon rows={CANDLE_LIT[0]!} legend={CANDLE_LEGEND} size={2} /></span><span>Three candles a day. Each fall burns one.</span></li>
     </ol>
     <div className="vote-row">
-      <button className="btn btn-share" onClick={onStart}>Light the torch</button>
+      <button className="btn btn-share" onClick={onStart}>Got it</button>
     </div>
   </section>
 );
