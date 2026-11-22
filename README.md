@@ -8,11 +8,15 @@ Built for Reddit's Game of the Day Hackathon on Devvit Web.
 
 ---
 
+## The camp
+
+Every visit starts in a small resting room: the adventurer sits by a campfire, and a parchment scroll keeps your record: your crossing streak (and best), the day and its difficulty, how many fell and crossed today, and where you stand. **Enter the dungeon** walks you through the door into the dark. Once you've finished the day's room, **Review the room** lets you look back at it with every pit and every arrow's truth revealed. The camp has its own calm music; the dungeon's is tense.
+
 ## How to play
 
 1. **Tap a stone next to the dwarf** to step onto it. Glowing corners show where you can step.
 2. **Read the numbers.** A number tells you how many pits touch that stone, counting all 8 neighbours. A blank stone (with footprints) has no pits around it.
-3. **Reach the door at the far wall** to cross.
+3. **Find the door hidden in the far wall** and step onto the stone in front of it to cross. The door is somewhere different every day, and you only see it when your torch reaches the wall.
 4. You have **3 candles** a day. Falling into a pit costs one, and you start again from the stairs. The stones you already walked stay remembered.
 5. **When you fall, carve an arrow.** Your grave slab goes on the stone you stood on just before you fell. Pick which way the arrow points: at the pit (the truth), or anywhere else (a lie). You always see which way you really fell, so a lie is a choice.
 6. **Read the slabs in your torchlight.** A slab means *someone stepped off this stone into a pit next to it*, but which neighbour? Only the arrow says, and it may lie. Slabs are safe to stand on; stepping onto one reads it. Tap a lit slab from a distance to read it too.
