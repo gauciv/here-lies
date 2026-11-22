@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { START, generateBoard, idx, isStep, type Board, type Cell } from '../../shared/board';
-import type { EpitaphId } from '../../shared/epitaphs';
+import { START, cellOf, generateBoard, idx, isStep, type Board, type Cell } from '../../shared/board';
+import type { Direction } from '../../shared/epitaphs';
 import type { CrossResponse, DayDto, EpitaphDto, FallResponse, GraveDto, MeDto, Vote } from '../../shared/api';
 import { loadApi, type GameApi } from '../api';
 import { isLit, type Phase } from '../engine/scene';
@@ -83,7 +83,8 @@ export const useGame = () => {
           me,
           graves: new Map(init.graves.map((g) => [g.i, g])),
           revealed: new Set([startIdx, ...me.revealed]),
-          player: me.uncarved !== null ? { c: me.uncarved % board.cols, r: Math.floor(me.uncarved / board.cols) } : me.crossed ? { c: 3, r: 0 } : START,
+          // mid-carve on reload: stand in the pit you fell into, so the true direction is known
+          player: me.uncarved !== null && me.fellInto.length ? cellOf(me.fellInto[me.fellInto.length - 1]!) : me.crossed ? { c: 3, r: 0 } : START,
           phase,
           card,
         }));
@@ -117,17 +118,19 @@ export const useGame = () => {
     const i = idx(cell.c, cell.r);
     const g = graves.get(i);
     const darkLifted = phase === 'crossed' || phase === 'idle';
-    const canSee = darkLifted || isLit(player, cell);
-    // graves can only be read where the torch (or the dawn) shows them
-    if (g && canSee && (g.carved > 0 || g.falls > 0) && !(phase === 'walking' && isStep(player, cell) && g.carved === 0)) {
-      void openGrave(i);
-      return;
-    }
     if (card.kind !== 'none') setS((p) => ({ ...p, card: { kind: 'none' } }));
     sound.startAmbience();
-    if (phase !== 'walking') return;
-    if (!isStep(player, cell)) {
-      if (card.kind === 'none') { sound.play('deny'); toast('Step onto a stone next to you.'); }
+    if (phase === 'walking' && isStep(player, cell)) {
+      if (s.me?.fellInto.includes(i)) {
+        sound.play('deny');
+        toast('You already fell there.');
+        return;
+      }
+      // fall through to the step below; slabs are walkable
+    } else {
+      // graves can only be read where the torch (or the dawn) shows them
+      if (g && (darkLifted || isLit(player, cell))) { void openGrave(i); return; }
+      if (phase === 'walking' && card.kind === 'none') { sound.play('deny'); toast('Step onto a stone next to you.'); }
       return;
     }
     const api = apiRef.current;
@@ -152,6 +155,8 @@ export const useGame = () => {
       revealed.add(i);
       return { ...p, player: cell, revealed, phase: crossing ? 'crossing' : 'walking', walkedThisRun: p.walkedThisRun + 1 };
     });
+    // stepping onto a slab reads it
+    if (g && !crossing && g.carved > 0) window.setTimeout(() => void openGrave(i), 200);
   }, [s, openGrave, toast]);
 
   const resetRun = (p: GameState): GameState => {
@@ -181,13 +186,13 @@ export const useGame = () => {
     }
   }, [toast]);
 
-  const carve = useCallback(async (text: EpitaphId) => {
+  const carve = useCallback(async (arrow: Direction) => {
     const api = apiRef.current;
     const { card, day } = s;
     if (!api || !day || card.kind !== 'carve') return;
     try {
       sound.play('carve');
-      const res = await api.carve(day.day, card.i, text);
+      const res = await api.carve(day.day, card.i, arrow);
       setS((p) => {
         const next = { ...p, me: res.me, graves: putGrave(p.graves, res.grave) };
         return res.me.candles > 0 ? resetRun(next) : { ...next, phase: 'idle', card: { kind: 'spent' } };
@@ -267,7 +272,7 @@ export const useGame = () => {
     const seen = s.revealed.size;
     if (seen <= 1 && s.walkedThisRun === 0) return 'Reach the light under the far door. Tap a glowing stone to step.';
     if (seen <= 3) return 'A number counts the pits touching that stone.';
-    if (s.graves.size && seen <= 6) return 'Graves mark where others fell. Tap one in your light.';
+    if (s.graves.size && seen <= 6) return 'A slab marks where someone stood before they fell. Its arrow may lie.';
     return 'Reach the far wall.';
   }, [s.status, s.phase, s.revealed.size, s.walkedThisRun, s.graves.size]);
 

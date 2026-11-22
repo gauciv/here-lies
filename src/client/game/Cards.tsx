@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { CANDLES_PER_DAY, dayStartUtc } from '../../shared/board';
-import { EPITAPHS, epitaphText, isForgotten, verdictOf, type EpitaphId, type Verdict } from '../../shared/epitaphs';
+import { directionName, isForgotten, validDirections, verdictOf, type Direction, type Verdict } from '../../shared/epitaphs';
+import type { Cell } from '../../shared/board';
+import { arrowRows } from '../engine/sprites';
+import type { ColorKey } from '../engine/palette';
+import { PixelIcon } from './PixelIcon';
 import type { DayDto, EpitaphDto, GraveDto, MeDto, Vote } from '../../shared/api';
 import { shareText } from '../../shared/share';
 import { pioneerTitle } from '../../shared/pioneer';
@@ -66,6 +70,12 @@ const VERDICT_LABEL: Record<Verdict, string> = {
 const who = (user: string, me: MeDto): string =>
   user === me.username ? 'you' : isForgotten(user) ? 'a forgotten soul' : `u/${user}`;
 
+const VERDICT_INK: Record<Verdict, ColorKey> = { trusted: 'warm4', liar: 'red2', disputed: 'pst1', unjudged: 'pst1' };
+
+const Arrow = ({ dir, color, size }: { dir: Direction; color: ColorKey; size: number }) => (
+  <PixelIcon rows={arrowRows(dir)} legend={{ '#': color }} size={size} title={`arrow pointing ${directionName(dir)}`} />
+);
+
 const ordinal = (n: number): string => {
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
@@ -106,25 +116,30 @@ export const GraveCard = ({ grave, list, me, onVote, onClose }: {
   const top = grave.top;
   const others = (list ?? []).filter((e) => e.id !== top?.id);
   const verdict = top ? verdictOf(top.honest, top.liar) : 'unjudged';
+  const fellHere = grave.falls === 1 ? 'Fell from this stone' : `${grave.falls} fell from this stone`;
   return (
-    <section className="card" aria-label="Grave">
+    <section className="card" aria-label="Grave slab">
       <button className="card-close" onClick={onClose} aria-label="Close">×</button>
       {top ? (
         <>
           <p className="card-kicker">Here lies {who(top.user, me)}</p>
-          <p className="epitaph">“{epitaphText(top.text)}”</p>
+          <div className="slab-read">
+            <span className="slab-arrow"><Arrow dir={top.arrow} color={VERDICT_INK[verdict]} size={6} /></span>
+            <p className="epitaph">“The pit is {directionName(top.arrow)}.”</p>
+          </div>
           <p className="card-meta">
-            {isForgotten(top.user) ? 'Long before today' : `Fell on step ${top.step}`} · <span className={`verdict verdict-${verdict}`}>{VERDICT_LABEL[verdict]}</span>
-            {grave.falls > 1 ? ` · ${grave.falls} fell here` : ''}
+            {fellHere} · {isForgotten(top.user) ? 'long before today' : `on step ${top.step}`} · <span className={`verdict verdict-${verdict}`}>{VERDICT_LABEL[verdict]}</span>
           </p>
           <VoteRow e={top} me={me} onVote={onVote} />
           {others.length > 0 && (
             <details className="more">
-              <summary>{others.length} more last words here</summary>
+              <summary>{others.length} more {others.length === 1 ? 'arrow' : 'arrows'} carved here</summary>
               <ul>
                 {others.map((e) => (
                   <li key={e.id}>
-                    <span className="more-text">“{epitaphText(e.text)}”</span>
+                    <span className="more-text">
+                      <Arrow dir={e.arrow} color={VERDICT_INK[verdictOf(e.honest, e.liar)]} size={3} /> {directionName(e.arrow)}
+                    </span>
                     <span className="more-who">{who(e.user, me)} · {e.honest} honest · {e.liar} liar</span>
                     {e.myVote === null && e.user !== me.username && <VoteRow e={e} me={me} onVote={onVote} />}
                   </li>
@@ -135,29 +150,45 @@ export const GraveCard = ({ grave, list, me, onVote, onClose }: {
         </>
       ) : (
         <>
-          <p className="card-kicker">{grave.falls} fell here</p>
-          <p className="epitaph epitaph-silent">They left no words.</p>
+          <p className="card-kicker">{fellHere}</p>
+          <p className="epitaph epitaph-silent">Nothing is carved yet.</p>
         </>
       )}
     </section>
   );
 };
 
-export const CarveCard = ({ me, step, onCarve }: { me: MeDto; step: number | null; onCarve: (t: EpitaphId) => void }) => {
+/** Compass layout: grid position → direction (null = the slab itself). */
+const COMPASS: readonly (Direction | null)[] = [7, 0, 1, 6, null, 2, 5, 4, 3];
+
+export const CarveCard = ({ me, step, stone, fellToward, onCarve }: {
+  me: MeDto; step: number | null; stone: Cell; fellToward: Direction | null; onCarve: (d: Direction) => void;
+}) => {
   const [busy, setBusy] = useState(false);
+  const valid = validDirections(stone);
   return (
-    <section className="card card-carve" aria-label="Carve your last words">
+    <section className="card card-carve" aria-label="Carve your arrow">
       <p className="card-kicker">Here lies you</p>
-      <p className="epitaph">The stone gave way{step ? ` on step ${step}` : ''}.</p>
+      <p className="epitaph">{fellToward !== null ? `You fell ${directionName(fellToward)}.` : 'The stone gave way.'}</p>
       <p className="card-meta">
-        Leave last words for whoever walks after you. Tell the truth, or don't.
+        Carve an arrow into the slab where you stood{step ? ` (step ${step})` : ''}. Point at the pit to warn the next wanderer, or point elsewhere to lie.
       </p>
-      <div className="carve-grid">
-        {EPITAPHS.map((t, k) => (
-          <button key={t} className="btn btn-carve" disabled={busy} onClick={() => { setBusy(true); onCarve(k); }}>
-            {t}
-          </button>
-        ))}
+      <div className="compass" role="group" aria-label="Choose an arrow">
+        {COMPASS.map((d, k) =>
+          d === null ? (
+            <span key={k} className="compass-core" aria-hidden="true" />
+          ) : (
+            <button
+              key={k}
+              className={`btn btn-compass${d === fellToward ? ' is-truth' : ''}`}
+              disabled={busy || !valid.includes(d)}
+              aria-label={`Carve an arrow pointing ${directionName(d)}${d === fellToward ? ' (the truth)' : ''}`}
+              onClick={() => { setBusy(true); onCarve(d); }}
+            >
+              <Arrow dir={d} color={valid.includes(d) ? 'ink' : 'pst2'} size={4} />
+            </button>
+          )
+        )}
       </div>
       <p className="card-foot">
         {me.candles > 0 ? `${me.candles} of ${CANDLES_PER_DAY} candles left. Your next walk begins at the stairs.` : 'That was your last candle.'}

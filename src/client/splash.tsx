@@ -86,13 +86,14 @@ export const Splash = () => {
   const scene = useMemo<SceneState>(() => {
     const graves = new Map<number, GraveView>();
     init?.graves.forEach((g) => {
-      graves.set(g.i, { falls: g.falls, honest: g.top?.honest ?? 0, liar: g.top?.liar ?? 0, carved: g.carved > 0, mine: g.mine });
+      graves.set(g.i, { arrow: g.top?.arrow ?? null, falls: g.falls, honest: g.top?.honest ?? 0, liar: g.top?.liar ?? 0, carved: g.carved > 0, mine: g.mine });
     });
     return {
       board: generateBoard(day),
       revealed: new Set([idx(START.c, START.r)]),
       player: START,
       graves,
+      knownPits: new Set<number>(),
       phase: 'walking',
       revealAll: false,
     };
@@ -115,7 +116,7 @@ export const Splash = () => {
               <b className="num-fallen">{init.day.fallen}</b> fell today · <b className="num-crossed">{init.day.crossed}</b> crossed
             </p>
           )}
-          <p className="splash-hook">Every grave holds last words.<br />Some of them lie.</p>
+          <p className="splash-hook">Every grave points the way.<br />Some of them lie.</p>
         </header>
         <button className="btn btn-cta" onClick={(e) => { e.stopPropagation(); open(e); }}>
           {cta}

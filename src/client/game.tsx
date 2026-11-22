@@ -5,6 +5,8 @@ import { createRoot } from 'react-dom/client';
 import { CarveCard, CrossedCard, GraveCard, SpentCard } from './game/Cards';
 import { Hud } from './game/Hud';
 import { Stage } from './game/Stage';
+import { cellOf } from '../shared/board';
+import { directionBetween } from '../shared/epitaphs';
 import { useGame } from './game/useGame';
 import type { GraveView, SceneState } from './engine/scene';
 
@@ -16,6 +18,7 @@ export const App = () => {
     const graves = new Map<number, GraveView>();
     s.graves.forEach((g) => {
       graves.set(g.i, {
+        arrow: g.top?.arrow ?? null,
         falls: g.falls,
         honest: g.top?.honest ?? 0,
         liar: g.top?.liar ?? 0,
@@ -24,8 +27,9 @@ export const App = () => {
       });
     });
     const revealAll = s.phase === 'crossed' || s.phase === 'idle';
-    return { board: s.board, revealed: s.revealed, player: s.player, graves, phase: s.phase, revealAll };
-  }, [s.board, s.revealed, s.player, s.graves, s.phase]);
+    const knownPits = new Set(s.me?.fellInto ?? []);
+    return { board: s.board, revealed: s.revealed, player: s.player, graves, knownPits, phase: s.phase, revealAll };
+  }, [s.board, s.revealed, s.player, s.graves, s.phase, s.me]);
 
   if (s.status === 'error') {
     return (
@@ -49,7 +53,9 @@ export const App = () => {
             {card.kind === 'grave' && grave && (
               <GraveCard grave={grave} list={s.details.get(card.i)} me={s.me} onVote={vote} onClose={closeCard} />
             )}
-            {card.kind === 'carve' && <CarveCard me={s.me} step={carveStep} onCarve={carve} />}
+            {card.kind === 'carve' && (
+              <CarveCard me={s.me} step={carveStep} stone={cellOf(card.i)} fellToward={directionBetween(cellOf(card.i), s.player)} onCarve={carve} />
+            )}
             {card.kind === 'crossed' && <CrossedCard me={s.me} day={s.day} onClose={closeCard} onShare={share} onJoin={join} onFlair={flair} />}
             {card.kind === 'spent' && <SpentCard me={s.me} day={s.day} onClose={closeCard} onShare={share} onJoin={join} />}
           </div>

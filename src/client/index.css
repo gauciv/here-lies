@@ -210,7 +210,12 @@ body {
 .card-close:hover { color: #fff; }
 .card-close:active { transform: translateY(3px); }
 
-.carve-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.slab-read { display: flex; align-items: center; gap: 12px; }
+.slab-arrow { flex: none; line-height: 0; padding: 6px; background: #aa8d7a; box-shadow: inset 0 0 0 3px #222, inset 3px 3px 0 3px #d3bfa9, inset -3px -3px 0 3px #775c55; }
+.compass { display: grid; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(3, 64px); gap: 6px; align-self: center; }
+.btn-compass { display: grid; place-items: center; padding: 0; line-height: 0; }
+.btn-compass.is-truth { border-image-source: url('./assets/ui/button-hot.png'); }
+.compass-core { background: #aa8d7a; box-shadow: inset 0 0 0 3px #222, inset 3px 3px 0 3px #d3bfa9, inset -3px -3px 0 3px #775c55; margin: 10px; }
 .btn-carve { text-align: left; border-image-source: url('./assets/ui/button-dark.png'); color: var(--tab-stone-h); font-weight: 400; padding: 3px 6px 5px; }
 .btn-carve:hover:not(:disabled) { border-image-source: url('./assets/ui/button.png'); color: var(--ink); filter: none; }
 
@@ -219,7 +224,7 @@ body {
 .more[open] summary::before { content: '− '; }
 .more ul { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
 .more li { display: flex; flex-direction: column; gap: 4px; }
-.more-text { color: var(--tab-stone-h); font-size: 16px; }
+.more-text { color: var(--tab-stone-h); font-size: 16px; display: flex; align-items: center; gap: 8px; }
 .more-who { color: var(--tab-stone-l); font-size: 12px; }
 
 .pioneer { margin: 0; display: flex; flex-direction: column; gap: 4px; }
