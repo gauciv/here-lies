@@ -37,13 +37,15 @@ void test('every daily board for a year is solvable on logic alone, at its diffi
 });
 
 void test('difficulty climbs through the week', () => {
-  const mondays = [], sundays = [];
+  const gentle: number[] = [], cruel: number[] = [];
   for (let day = 1; day <= 140; day++) {
     const name = difficultyOf(day).name;
     const r = solve(generateBoard(day));
-    if (name === 'Gentle') mondays.push(r.comparisons);
-    if (name === 'Brutal') sundays.push(r.comparisons);
+    if (name === 'Gentle') gentle.push(r.comparisons);
+    if (name === 'Cruel') cruel.push(r.comparisons);
   }
   const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
-  assert.ok(avg(sundays) > avg(mondays) + 2);
+  assert.ok(avg(cruel) > avg(gentle) + 1.5);
+  // bite-sized: even the hardest day never needs more than five cross-checks
+  assert.ok(Math.max(...cruel) <= 5);
 });

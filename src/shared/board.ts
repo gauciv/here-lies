@@ -59,25 +59,26 @@ export const shortestCrossing = (pits: boolean[], start: Cell = START): number =
 
 export type Difficulty = {
   name: string;
-  /** pits placed: [min, max] */
+  /** pits placed in a full 7×9 room: [min, max]; smaller rooms get proportionally fewer */
   pits: readonly [number, number];
   /** two-number comparisons a careful player must make: [min, max] */
   comparisons: readonly [number, number];
+  /** chance that each of the morning's forgotten slabs tells the truth */
+  honesty: number;
+  /** one line on the parchment so the day's mood reads before you step in */
+  hint: string;
 };
 
-// Difficulty climbs through the week (UTC), crossword-style. Every board is
-// guaranteed crossable on logic alone; harder days need more cross-checking.
-const WEEK: readonly Difficulty[] = [
-  { name: 'Brutal', pits: [15, 16], comparisons: [4, 9] }, // Sunday
-  { name: 'Gentle', pits: [11, 12], comparisons: [1, 2] }, // Monday
-  { name: 'Gentle', pits: [11, 12], comparisons: [1, 2] },
-  { name: 'Tricky', pits: [12, 13], comparisons: [2, 3] },
-  { name: 'Tricky', pits: [13, 14], comparisons: [2, 4] },
-  { name: 'Cruel', pits: [14, 15], comparisons: [3, 5] },
-  { name: 'Cruel', pits: [14, 15], comparisons: [3, 6] }, // Saturday
-];
+const GENTLE: Difficulty = { name: 'Gentle', pits: [11, 12], comparisons: [1, 2], honesty: 0.8, hint: 'The dead here mostly tell the truth.' };
+const TRICKY: Difficulty = { name: 'Tricky', pits: [12, 14], comparisons: [2, 3], honesty: 0.6, hint: 'Some of the dead here lie.' };
+const CRUEL: Difficulty = { name: 'Cruel', pits: [14, 15], comparisons: [3, 5], honesty: 0.4, hint: 'Trust no slab. Trust the numbers.' };
 
-export const difficultyOf = (day: number): Difficulty => WEEK[new Date(dayStartUtc(day)).getUTCDay()] ?? WEEK[1]!;
+// A gentle weekly rhythm (UTC): easy at the start of the week, hardest on
+// Friday and Saturday, easing off on Sunday. Every board is crossable on logic
+// alone; harder days need more cross-checking and the dead lie more.
+const WEEK: readonly Difficulty[] = [TRICKY, GENTLE, GENTLE, TRICKY, TRICKY, CRUEL, CRUEL]; // Sunday first
+
+export const difficultyOf = (day: number): Difficulty => WEEK[new Date(dayStartUtc(day)).getUTCDay()] ?? GENTLE;
 
 const placePits = (rand: () => number, count: number, door: Cell): boolean[] => {
   const pits = new Array<boolean>(COLS * ROWS).fill(false);

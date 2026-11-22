@@ -6,7 +6,7 @@
 // player carves at most once per day. Arrows are judged by the game itself:
 // it counts who an arrow saved (stepped off its stone safely when it told the
 // truth) and who it fooled (fell from its stone when it lied).
-import { CANDLES_PER_DAY, ROWS, cellOf, dayNumber, generateBoard, idx, judgeRun, mulberry32, neighbors, type Cell } from './board';
+import { CANDLES_PER_DAY, ROWS, cellOf, dayNumber, difficultyOf, generateBoard, idx, judgeRun, mulberry32, neighbors, type Cell } from './board';
 import { CRUMBLE_AFTER, FORGOTTEN, MAX_ARROWS, arrowIsTrue, directionBetween, isAnonymous, isDirection, validDirections } from './epitaphs';
 import { canShare, shareText } from './share';
 import { pioneerFlair, pioneerScore, type Flair } from './pioneer';
@@ -31,7 +31,7 @@ export type Store = {
 export class GameError extends Error {}
 
 /** Bump when the stored shape changes, so old days don't mix with new rules. */
-const NS = 'v4:';
+const NS = 'v5:';
 
 const K = {
   stats: (d: number) => `${NS}d:${d}:stats`,
@@ -185,6 +185,7 @@ export class Engine {
     if (!(await this.store.hSetNX(K.stats(day), 'seeded', '1'))) return;
     const board = generateBoard(day);
     const rand = mulberry32(day * 7919 + 17);
+    const { honesty } = difficultyOf(day);
     // pits in the lower and middle rows that touch a walkable stone: where walkers meet them
     const candidates = board.pits
       .map((p, i) => (p ? i : -1))
@@ -210,7 +211,7 @@ export class Engine {
       used.add(stone);
       const truth = directionBetween(cellOf(stone), p) ?? 0;
       const others = validDirections(cellOf(stone)).filter((d) => !arrowIsTrue(board, stone, d));
-      const arrow = rand() < 0.6 || !others.length ? truth : others[Math.floor(rand() * others.length)]!;
+      const arrow = rand() < honesty || !others.length ? truth : others[Math.floor(rand() * others.length)]!;
       await this.store.hIncrBy(K.slabClaim(day), String(stone), 1);
       await this.writeArrow(day, stone, { user: FORGOTTEN, arrow: String(arrow), step: '0', at: String(at) });
       await this.store.hIncrBy(K.slabFalls(day), String(stone), 1);
