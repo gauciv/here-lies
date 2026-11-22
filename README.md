@@ -79,11 +79,11 @@ The game is meant to be bite-sized, so even the hardest day never needs more tha
 
 | Day | Tier | What it means |
 |---|---|---|
-| Monday, Tuesday | Gentle | Reading single numbers is mostly enough. The dead mostly tell the truth. |
-| Wednesday, Thursday, Sunday | Tricky | You will need to compare neighbouring numbers. Some of the dead lie. |
-| Friday, Saturday | Cruel | More pits and more cross-checking. Most forgotten slabs lie. |
+| Monday, Tuesday | Gentle | Reading single numbers is mostly enough. |
+| Wednesday, Thursday, Sunday | Tricky | You will need to compare neighbouring numbers. |
+| Friday, Saturday | Cruel | More pits and more cross-checking. |
 
-Every room is checked by a solver that thinks like a careful player: it can always be crossed on logic alone, with no guessing and no need to trust a slab. The tier and its one-line hint are shown on the parchment before you step in.
+Every room is checked by a solver that thinks like a careful player: it can always be crossed on logic alone, with no guessing and no need to trust a slab. Anyone can carve a lie on any day; only the three *forgotten* slabs seeded each morning get less honest as the week gets harder. In the game, the bar at the top shows the tier beside a subtle tip about the room's shape (*Walls close in.*, *Left or right?*) that never gives away a pit or the door.
 
 ---
 
