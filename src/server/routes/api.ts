@@ -76,15 +76,6 @@ api.post('/carve', async (c) => {
   }
 });
 
-api.post('/vote', async (c) => {
-  try {
-    const body = await readBody(c);
-    if (typeof body.id !== 'string') throw new GameError('Unknown epitaph');
-    return c.json(await engine.vote(dayFrom(body), await username(), body.id, body.vote));
-  } catch (e) {
-    return fail(c, e);
-  }
-});
 
 // Posting and joining happen only from their own explicit buttons (Devvit user-action rules).
 api.post('/share', async (c) => {
@@ -127,17 +118,6 @@ api.post('/flair', async (c) => {
     const flair = await engine.flairFor(day, user);
     await reddit.setUserFlair({ subredditName, username: user, ...flair });
     return c.json<FlairResponse>({ type: 'flair', text: flair.text });
-  } catch (e) {
-    return fail(c, e);
-  }
-});
-
-api.get('/grave', async (c) => {
-  try {
-    const day = postDay();
-    const i = Number(c.req.query('i'));
-    if (!Number.isInteger(i)) throw new GameError('Unknown grave');
-    return c.json(await engine.graveDetail(day, await username(), i));
   } catch (e) {
     return fail(c, e);
   }
