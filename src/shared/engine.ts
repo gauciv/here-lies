@@ -1,7 +1,7 @@
 // Authoritative game rules over a tiny key-value interface. The Devvit server
 // runs this against Redis; the local preview runs it against an in-memory map.
-import { CANDLES_PER_DAY, dayNumber, generateBoard, idx, judgeRun, type Cell } from './board';
-import { isEpitaphId } from './epitaphs';
+import { CANDLES_PER_DAY, ROWS, cellOf, dayNumber, generateBoard, idx, judgeRun, mulberry32, neighbors, type Cell } from './board';
+import { EPITAPHS, FORGOTTEN, isEpitaphId } from './epitaphs';
 import type {
   CarveResponse,
   CrossResponse,
@@ -133,7 +133,45 @@ export class Engine {
     };
   }
 
+  /**
+   * Lay a few nameless graves on a fresh day so the first players already meet
+   * last words to trust or doubt. They never count toward the day's "fallen".
+   */
+  private async ensureSeeded(day: number): Promise<void> {
+    if (!(await this.store.hSetNX(K.stats(day), 'seeded', '1'))) return;
+    const board = generateBoard(day);
+    const rand = mulberry32(day * 7919 + 17);
+    // pits in the lower and middle rows that touch a walkable stone: where walkers meet them
+    const candidates = board.pits
+      .map((p, i) => (p ? i : -1))
+      .filter((i) => {
+        if (i < 0) return false;
+        const { c, r } = cellOf(i);
+        return r >= 2 && r <= ROWS - 3 && neighbors(c, r).some((n) => !board.pits[idx(n.c, n.r)]);
+      });
+    for (let k = candidates.length - 1; k > 0; k--) {
+      const j = Math.floor(rand() * (k + 1));
+      [candidates[k], candidates[j]] = [candidates[j]!, candidates[k]!];
+    }
+    const at = Date.now() - 6 * 3_600_000;
+    for (const i of candidates.slice(0, 3)) {
+      const id = String(await this.store.incrBy(K.epSeq(day), 1));
+      await this.store.hSet(K.ep(day, id), {
+        user: FORGOTTEN,
+        i: String(i),
+        text: String(Math.floor(rand() * EPITAPHS.length)),
+        step: '0',
+        at: String(at),
+        honest: '0',
+        liar: '0',
+      });
+      await this.store.zAdd(K.cell(day, i), id, epScore(0, 0) + at / 1e13);
+      await this.store.hIncrBy(K.falls(day), String(i), 1);
+    }
+  }
+
   async init(day: number, user: string, postId: string): Promise<InitResponse> {
+    await this.ensureSeeded(day);
     const falls = await this.store.hGetAll(K.falls(day));
     const cells = Object.keys(falls).map(Number).filter(Number.isInteger);
     const [dayDto, me, graves] = await Promise.all([

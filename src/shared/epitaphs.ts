@@ -18,6 +18,10 @@ export const EPITAPHS = [
 
 export type EpitaphId = number;
 
+/** Author id of the dungeon's nameless dead, seeded so no day starts empty. */
+export const FORGOTTEN = '~forgotten';
+export const isForgotten = (user: string): boolean => user === FORGOTTEN;
+
 export const epitaphText = (id: EpitaphId): string => EPITAPHS[id] ?? '…';
 
 export const isEpitaphId = (v: unknown): v is EpitaphId =>

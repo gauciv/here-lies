@@ -61,8 +61,21 @@ void test('fall → carve → vote → cross loop', async () => {
   await assert.rejects(e.cross(DAY, 'alice', crossPath), GameError);
 
   const init = await e.init(DAY, 'bob', 't3_x');
-  assert.equal(init.graves.length, 1);
+  assert.ok(init.graves.some((g) => g.i === i && g.top?.user === 'alice'));
   assert.equal(init.day.crossed, 1);
+});
+
+void test('a fresh day is seeded once with forgotten graves that do not count as fallen', async () => {
+  const e = new Engine(new MemoryStore());
+  const a = await e.init(DAY, 'zoe', 't3_x');
+  const b = await e.init(DAY, 'yan', 't3_x');
+  assert.equal(a.graves.length, 3);
+  assert.equal(b.graves.length, 3);
+  assert.equal(a.day.fallen, 0);
+  for (const g of a.graves) {
+    assert.equal(g.top?.user, '~forgotten');
+    assert.equal(generateBoard(DAY).pits[g.i], true);
+  }
 });
 
 void test('candles run out after three falls', async () => {
