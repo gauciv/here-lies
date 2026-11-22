@@ -109,6 +109,7 @@ void test('sharing: only after the run, once, and a failed post can be retried',
   await e.cross(DAY, 'sam', crossPath);
   const text = await e.claimShare(DAY, 'sam');
   assert.match(text, /Crossed the dark/);
+  assert.ok(/^[\x20-\x7E\n·]*$/.test(text), 'share text uses only characters every font has');
   await assert.rejects(e.claimShare(DAY, 'sam'), /already/);
   await e.confirmShare(DAY, 'sam', false);
   await e.claimShare(DAY, 'sam');
