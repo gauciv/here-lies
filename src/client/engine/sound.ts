@@ -1,7 +1,7 @@
 // All sound is synthesised with WebAudio: no files, nothing to license, tiny.
 // Audio only starts after the player's first tap (browser autoplay rules).
 
-type Cue = 'step' | 'fall' | 'carve' | 'vote' | 'cross' | 'deny' | 'crumble' | 'revive' | 'snuff' | 'victory';
+type Cue = 'step' | 'fall' | 'carve' | 'vote' | 'cross' | 'deny' | 'crumble' | 'revive' | 'snuff' | 'victory' | 'door';
 
 const MUTE_KEY = 'herelies:muted';
 
@@ -150,6 +150,28 @@ class Sound {
         [1174.66, 1479.98, 1760].forEach((hz, k) => this.tone(t + 0.75 + k * 0.09, 1.8, hz, 0.025, 'sine'));
         break;
       }
+      case 'door': { // the old door groans open
+        const ctxD = this.ctx;
+        if (!ctxD || !this.master) break;
+        const o = ctxD.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(95, t);
+        o.frequency.linearRampToValueAtTime(140, t + 0.45);
+        o.frequency.linearRampToValueAtTime(88, t + 0.85);
+        const f = ctxD.createBiquadFilter();
+        f.type = 'bandpass';
+        f.frequency.value = 800;
+        f.Q.value = 7;
+        const g = ctxD.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.08, t + 0.1);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+        o.connect(f).connect(g).connect(this.master);
+        o.start(t);
+        o.stop(t + 0.95);
+        this.burst(t + 0.85, 0.2, 160, 0.7, 0.18);
+        break;
+      }
       case 'snuff': // a candle pinched out: a short hiss and a breath of smoke
         this.burst(t, 0.18, 5200, 0.8, 0.12, 'highpass');
         this.burst(t + 0.05, 0.35, 900, 0.7, 0.05);
@@ -211,134 +233,176 @@ class Sound {
     env.connect(echo);
   }
 
-  /**
-   * The dungeon's music: a breathing low drone, sparse bell notes wandering a
-   * minor scale through a cave echo, the odd drip, a draft and the torch. It is
-   * generative (never the same twice), quiet, and only starts after a tap.
-   */
-  startAmbience(): void {
-    const ctx = this.ensure();
-    if (!ctx || this.ambience || !this.master || !this.noise) return;
-    const now = ctx.currentTime;
-    const timers: number[] = [];
-    const nodes: AudioScheduledSourceNode[] = [];
-    let stopped = false;
+  private mode: 'dungeon' | 'camp' = 'dungeon';
 
-    // one bus for everything, fading in so it never starts abruptly
+  /** Switch soundtracks: tense in the dungeon, calm at camp. Only plays after a tap. */
+  setMode(mode: 'dungeon' | 'camp'): void {
+    if (mode === this.mode && this.ambience) return;
+    this.mode = mode;
+    this.stopAmbience();
+    this.startAmbience();
+  }
+
+  /** Shared plumbing for both soundtracks: a fading-in bus and a dark cave echo. */
+  private musicBus(ctx: AudioContext, master: GainNode) {
+    const now = ctx.currentTime;
     const bus = ctx.createGain();
     bus.gain.setValueAtTime(0.0001, now);
-    bus.gain.exponentialRampToValueAtTime(1, now + 4);
-    bus.connect(this.master);
-
-    // cave echo: a dark, decaying delay
+    bus.gain.exponentialRampToValueAtTime(1, now + 3);
+    bus.connect(master);
     const echo = ctx.createDelay(1.5);
     echo.delayTime.value = 0.42;
     const feedback = ctx.createGain();
-    feedback.gain.value = 0.38;
+    feedback.gain.value = 0.36;
     const damp = ctx.createBiquadFilter();
     damp.type = 'lowpass';
     damp.frequency.value = 1500;
     echo.connect(damp).connect(feedback).connect(echo);
     const wet = ctx.createGain();
-    wet.gain.value = 0.55;
+    wet.gain.value = 0.5;
     damp.connect(wet).connect(bus);
+    return { bus, echo };
+  }
 
-    // draft: filtered noise, slowly swelling
-    const air = ctx.createBufferSource();
-    air.buffer = this.noise;
-    air.loop = true;
-    const airF = ctx.createBiquadFilter();
-    airF.type = 'lowpass';
-    airF.frequency.value = 220;
-    const airG = ctx.createGain();
-    airG.gain.value = 0.03;
-    const airLfo = ctx.createOscillator();
-    airLfo.frequency.value = 0.07;
-    const airLfoG = ctx.createGain();
-    airLfoG.gain.value = 0.015;
-    airLfo.connect(airLfoG).connect(airG.gain);
-    air.connect(airF).connect(airG).connect(bus);
-    nodes.push(air, airLfo);
-
-    // drone: D and A, a little detuned so they shimmer, breathing slowly
-    const drone = ctx.createGain();
-    drone.gain.setValueAtTime(0.0001, now);
-    drone.gain.exponentialRampToValueAtTime(0.045, now + 6);
-    const droneF = ctx.createBiquadFilter();
-    droneF.type = 'lowpass';
-    droneF.frequency.value = 360;
-    drone.connect(droneF).connect(bus);
-    for (const [hz, type, level] of [[73.42, 'sine', 1], [73.9, 'sine', 0.6], [110, 'triangle', 0.35]] as const) {
+  startAmbience(): void {
+    const ctx = this.ensure();
+    if (!ctx || this.ambience || !this.master || !this.noise) return;
+    const timers: number[] = [];
+    const nodes: AudioScheduledSourceNode[] = [];
+    let stopped = false;
+    const { bus, echo } = this.musicBus(ctx, this.master);
+    const every = (minMs: number, maxMs: number, fn: () => void) => {
+      const next = () => {
+        if (stopped) return;
+        timers.push(window.setTimeout(() => { if (!stopped && this.ctx) fn(); next(); }, minMs + Math.random() * (maxMs - minMs)));
+      };
+      next();
+    };
+    const osc = (type: OscillatorType, hz: number, level: number, into: AudioNode) => {
       const o = ctx.createOscillator();
       o.type = type;
       o.frequency.value = hz;
       const g = ctx.createGain();
       g.gain.value = level;
-      o.connect(g).connect(drone);
+      o.connect(g).connect(into);
       o.start();
       nodes.push(o);
-    }
-    const breath = ctx.createOscillator();
-    breath.frequency.value = 0.05;
-    const breathG = ctx.createGain();
-    breathG.gain.value = 0.015;
-    breath.connect(breathG).connect(drone.gain);
-    breath.start();
-    nodes.push(breath);
-    air.start();
-    airLfo.start();
-
-    // bells: sparse, mostly stepwise through D minor, so it feels like a slow tune
-    const scale = [146.83, 174.61, 196.0, 220.0, 261.63, 293.66, 349.23];
-    let note = 3;
-    const nextBell = () => {
-      if (stopped) return;
-      timers.push(window.setTimeout(() => {
-        if (stopped || !this.ctx) return;
-        if (performance.now() > this.quietUntil) {
-          note = Math.max(0, Math.min(scale.length - 1, note + [-2, -1, -1, 1, 1, 2][Math.floor(Math.random() * 6)]!));
-          const at = this.ctx.currentTime + 0.05;
-          this.bell(bus, echo, at, scale[note]!, 0.045);
-          if (Math.random() < 0.3) this.bell(bus, echo, at + 0.9, scale[Math.max(0, note - 2)]!, 0.03);
-        }
-        nextBell();
-      }, 4000 + Math.random() * 5000));
+      return o;
     };
-    nextBell();
+    const fireCrackle = (rate: number, loud: number) => window.setInterval(() => {
+      if (!this.ctx || Math.random() < 0.35) return;
+      const at = this.ctx.currentTime + Math.random() * 0.2;
+      this.burst(at, 0.02 + Math.random() * 0.03, 2200 + Math.random() * 2800, 2, loud * (0.5 + Math.random() * 0.6), 'bandpass');
+    }, rate);
+    let crackle = 0;
 
-    // drips: a high plink that falls in pitch, then echoes away
-    const nextDrip = () => {
-      if (stopped) return;
-      timers.push(window.setTimeout(() => {
-        if (stopped || !this.ctx) return;
-        if (performance.now() > this.quietUntil) {
-          const at = this.ctx.currentTime + 0.02;
+    if (this.mode === 'dungeon') {
+      // drone: D with a grinding E-flat a minor second above, low and filtered
+      const drone = ctx.createGain();
+      drone.gain.setValueAtTime(0.0001, ctx.currentTime);
+      drone.gain.exponentialRampToValueAtTime(0.05, ctx.currentTime + 5);
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 240;
+      drone.connect(lp).connect(bus);
+      osc('sawtooth', 73.42, 0.5, drone);
+      osc('sawtooth', 77.78, 0.32, drone);
+      osc('sine', 36.71, 0.8, drone);
+      // a slow wobble on the filter keeps the drone uneasy
+      const wob = ctx.createOscillator();
+      wob.frequency.value = 0.09;
+      const wobG = ctx.createGain();
+      wobG.gain.value = 60;
+      wob.connect(wobG).connect(lp.frequency);
+      wob.start();
+      nodes.push(wob);
+      // heartbeat: lub-dub, slow and steady
+      every(1500, 1700, () => {
+        if (performance.now() < this.quietUntil || !this.ctx) return;
+        const at = this.ctx.currentTime + 0.02;
+        this.tone(at, 0.16, 58, 0.16, 'sine', 40);
+        this.tone(at + 0.2, 0.14, 52, 0.11, 'sine', 38);
+      });
+      // eerie bells: tritones, slightly detuned, far apart
+      const eerie = [146.83, 207.65, 155.56, 220.0, 293.66, 415.3];
+      every(6000, 12000, () => {
+        if (performance.now() < this.quietUntil || !this.ctx) return;
+        const at = this.ctx.currentTime + 0.05;
+        const k = Math.floor(Math.random() * (eerie.length - 1));
+        this.bell(bus, echo, at, eerie[k]! * 1.004, 0.035);
+        this.bell(bus, echo, at + 0.6, eerie[k + 1]! * 0.997, 0.028);
+      });
+      // a distant metallic scrape now and then
+      every(14000, 26000, () => {
+        if (!this.ctx || !this.noise) return;
+        const at = this.ctx.currentTime + 0.05;
+        const src = this.ctx.createBufferSource();
+        src.buffer = this.noise;
+        const f = this.ctx.createBiquadFilter();
+        f.type = 'bandpass';
+        f.Q.value = 18;
+        f.frequency.setValueAtTime(900, at);
+        f.frequency.linearRampToValueAtTime(620, at + 1.2);
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.0001, at);
+        g.gain.exponentialRampToValueAtTime(0.05, at + 0.3);
+        g.gain.exponentialRampToValueAtTime(0.0001, at + 1.3);
+        src.connect(f).connect(g);
+        g.connect(echo);
+        src.start(at, Math.random(), 1.4);
+      });
+      // drips
+      every(7000, 15000, () => {
+        if (!this.ctx) return;
+        const at = this.ctx.currentTime + 0.02;
+        const hz = 1700 + Math.random() * 900;
+        const o = this.ctx.createOscillator();
+        o.frequency.setValueAtTime(hz, at);
+        o.frequency.exponentialRampToValueAtTime(hz * 0.55, at + 0.07);
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.0001, at);
+        g.gain.exponentialRampToValueAtTime(0.02, at + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.0001, at + 0.12);
+        o.connect(g);
+        g.connect(echo);
+        o.start(at);
+        o.stop(at + 0.15);
+      });
+      crackle = fireCrackle(220, 0.045);
+    } else {
+      // camp: warm pads drifting between Dmaj7 and Gmaj7, gentle plucks, a cosy fire
+      const chords = [[146.83, 185.0, 220.0, 277.18], [98.0, 123.47, 146.83, 185.0]];
+      let which = 0;
+      const pad = (at: number, notes: number[]) => {
+        if (!this.ctx) return;
+        for (const hz of notes) {
           const o = this.ctx.createOscillator();
-          o.type = 'sine';
-          const hz = 1800 + Math.random() * 900;
-          o.frequency.setValueAtTime(hz, at);
-          o.frequency.exponentialRampToValueAtTime(hz * 0.55, at + 0.07);
+          o.type = 'triangle';
+          o.frequency.value = hz;
           const g = this.ctx.createGain();
           g.gain.setValueAtTime(0.0001, at);
-          g.gain.exponentialRampToValueAtTime(0.025, at + 0.005);
-          g.gain.exponentialRampToValueAtTime(0.0001, at + 0.12);
-          o.connect(g);
-          g.connect(echo);
-          g.connect(bus);
+          g.gain.exponentialRampToValueAtTime(0.022, at + 2.2);
+          g.gain.exponentialRampToValueAtTime(0.0001, at + 8.5);
+          o.connect(g).connect(bus);
           o.start(at);
-          o.stop(at + 0.15);
+          o.stop(at + 8.6);
         }
-        nextDrip();
-      }, 7000 + Math.random() * 9000));
-    };
-    nextDrip();
-
-    // the torch, kept quiet underneath
-    const crackle = window.setInterval(() => {
-      if (!this.ctx || Math.random() < 0.4) return;
-      const at = this.ctx.currentTime + Math.random() * 0.2;
-      this.burst(at, 0.02 + Math.random() * 0.03, 2500 + Math.random() * 2500, 2, 0.025 + Math.random() * 0.035, 'bandpass');
-    }, 200);
+      };
+      pad(ctx.currentTime + 0.1, chords[0]!);
+      every(7000, 7000, () => {
+        if (!this.ctx) return;
+        which = 1 - which;
+        pad(this.ctx.currentTime + 0.05, chords[which]!);
+      });
+      const pent = [293.66, 329.63, 369.99, 440.0, 493.88, 587.33];
+      let note = 2;
+      every(2600, 5200, () => {
+        if (!this.ctx) return;
+        note = Math.max(0, Math.min(pent.length - 1, note + [-1, -1, 1, 1, 2, -2][Math.floor(Math.random() * 6)]!));
+        this.bell(bus, echo, this.ctx.currentTime + 0.05, pent[note]!, 0.03);
+      });
+      crackle = fireCrackle(140, 0.07);
+    }
 
     this.ambience = {
       stop: () => {
@@ -347,9 +411,9 @@ class Sound {
         window.clearInterval(crackle);
         const t = this.ctx?.currentTime ?? 0;
         bus.gain.cancelScheduledValues(t);
-        bus.gain.setValueAtTime(bus.gain.value, t);
-        bus.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
-        window.setTimeout(() => nodes.forEach((n) => { try { n.stop(); } catch { /* already stopped */ } }), 500);
+        bus.gain.setValueAtTime(Math.max(0.0001, bus.gain.value), t);
+        bus.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+        window.setTimeout(() => nodes.forEach((n) => { try { n.stop(); } catch { /* already stopped */ } }), 600);
       },
     };
   }
