@@ -131,9 +131,7 @@ export const GraveCard = ({ grave, me, board, judged, onClose }: {
         </div>
       </div>
       <ul className="tags" aria-label="About this slab">
-        {truth === null ? (
-          <li className="tag tag-hidden">Truth: after your run</li>
-        ) : (
+        {truth !== null && (
           <li className={`tag ${truth ? 'tag-true' : 'tag-lie'}`}>{truth ? `True · saved ${top.saved}` : `Lie · fooled ${top.fooled}`}</li>
         )}
         <li className="tag">{grave.falls} fell here</li>
