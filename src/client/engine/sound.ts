@@ -1,7 +1,7 @@
 // All sound is synthesised with WebAudio: no files, nothing to license, tiny.
 // Audio only starts after the player's first tap (browser autoplay rules).
 
-type Cue = 'step' | 'fall' | 'carve' | 'vote' | 'cross' | 'deny' | 'crumble' | 'revive' | 'snuff' | 'victory' | 'door' | 'ignite';
+type Cue = 'step' | 'fall' | 'carve' | 'vote' | 'deny' | 'crumble' | 'revive' | 'snuff' | 'victory' | 'door' | 'ignite';
 
 const MUTE_KEY = 'herelies:muted';
 
@@ -67,6 +67,56 @@ class Sound {
     g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
     src.connect(f).connect(g).connect(master);
     src.start(at, Math.random() * 0.5, dur + 0.05);
+  }
+
+  private pulses: PeriodicWave | null = null;
+
+  /**
+   * A door creak: wood sticking and slipping on its hinge is a train of tiny clicks
+   * whose rate wanders, ringing through a few wooden resonances. Ends with a soft
+   * knock as the door swings against the wall.
+   */
+  private creak(at: number, dur: number): void {
+    const ctx = this.ctx, master = this.master;
+    if (!ctx || !master) return;
+    if (!this.pulses) {
+      const n = 48;
+      const real = new Float32Array(n), imag = new Float32Array(n);
+      for (let k = 1; k < n; k++) real[k] = 1; // equal harmonics: a narrow click train
+      this.pulses = ctx.createPeriodicWave(real, imag, { disableNormalization: false });
+    }
+    const o = ctx.createOscillator();
+    o.setPeriodicWave(this.pulses);
+    // the stick-slip rate: slow, catching, speeding up, dragging again
+    const steps = 24;
+    const curve = new Float32Array(steps);
+    for (let k = 0; k < steps; k++) {
+      const x = k / (steps - 1);
+      curve[k] = 14 + 38 * Math.sin(Math.PI * Math.min(1, x * 1.2)) + (Math.random() - 0.5) * 10;
+    }
+    o.frequency.setValueCurveAtTime(curve, at, dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(0.5, at + 0.08);
+    g.gain.setValueAtTime(0.5, at + dur * 0.7);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.connect(g);
+    for (const [hz, q, lvl] of [[520, 14, 0.09], [1150, 16, 0.06], [2300, 18, 0.03]] as const) {
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.frequency.setValueAtTime(hz, at);
+      f.frequency.linearRampToValueAtTime(hz * 1.12, at + dur * 0.5);
+      f.frequency.linearRampToValueAtTime(hz * 0.95, at + dur);
+      f.Q.value = q;
+      const out = ctx.createGain();
+      out.gain.value = lvl;
+      g.connect(f).connect(out).connect(master);
+    }
+    o.start(at);
+    o.stop(at + dur + 0.05);
+    // the door knocks softly against the stone
+    this.burst(at + dur - 0.05, 0.16, 260, 0.8, 0.14);
+    this.tone(at + dur - 0.05, 0.14, 120, 0.06, 'triangle', 80);
   }
 
   private tone(at: number, dur: number, freq: number, gain: number, type: OscillatorType = 'sine', slideTo?: number): void {
@@ -138,40 +188,15 @@ class Sound {
         [293.66, 349.23, 440, 587.33].forEach((hz, k) => this.tone(t + 0.25 + k * 0.11, 1.4, hz, 0.06, 'sine'));
         break;
       }
-      case 'victory': { // a deep stone boom, a rising brassy D-major flourish, a bell shimmer
-        this.tone(t, 0.9, 73.42, 0.16, 'triangle', 55);
-        this.burst(t, 0.5, 180, 0.6, 0.2);
-        const notes = [293.66, 369.99, 440, 587.33];
-        notes.forEach((hz, k) => {
-          this.tone(t + 0.12 + k * 0.13, 0.5, hz, 0.07, 'sawtooth');
-          this.tone(t + 0.12 + k * 0.13, 0.9, hz, 0.06, 'triangle');
-        });
-        [587.33, 739.99, 880].forEach((hz) => this.tone(t + 0.7, 2.6, hz, 0.05, 'triangle'));
-        [1174.66, 1479.98, 1760].forEach((hz, k) => this.tone(t + 0.75 + k * 0.09, 1.8, hz, 0.025, 'sine'));
+      case 'victory': { // through the door: a soft rising bell chord, then a shimmer (no boom)
+        [293.66, 369.99, 440, 587.33].forEach((hz, k) => this.tone(t + k * 0.12, 1.8, hz, 0.055, 'triangle'));
+        [587.33, 739.99, 880].forEach((hz) => this.tone(t + 0.5, 2.4, hz, 0.03, 'sine'));
+        [1174.66, 1479.98, 1760].forEach((hz, k) => this.tone(t + 0.6 + k * 0.09, 1.8, hz, 0.02, 'sine'));
         break;
       }
-      case 'door': { // the old door groans open
-        const ctxD = this.ctx;
-        if (!ctxD || !this.master) break;
-        const o = ctxD.createOscillator();
-        o.type = 'sawtooth';
-        o.frequency.setValueAtTime(95, t);
-        o.frequency.linearRampToValueAtTime(140, t + 0.45);
-        o.frequency.linearRampToValueAtTime(88, t + 0.85);
-        const f = ctxD.createBiquadFilter();
-        f.type = 'bandpass';
-        f.frequency.value = 800;
-        f.Q.value = 7;
-        const g = ctxD.createGain();
-        g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(0.08, t + 0.1);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
-        o.connect(f).connect(g).connect(this.master);
-        o.start(t);
-        o.stop(t + 0.95);
-        this.burst(t + 0.85, 0.2, 160, 0.7, 0.18);
+      case 'door': // an old wooden door creaks open and knocks against the wall
+        this.creak(t, 1.15);
         break;
-      }
       case 'ignite': // a torch catches: a soft whoosh, then a few crackles
         this.burst(t, 0.35, 500, 0.8, 0.12, 'bandpass');
         this.burst(t + 0.05, 0.5, 1400, 0.6, 0.05, 'bandpass');
@@ -184,28 +209,6 @@ class Sound {
       case 'deny':
         this.tone(t, 0.12, 180, 0.08, 'square', 140);
         break;
-      case 'cross': { // door creaks open, then a warm chord swells
-        const ctxN = this.ctx;
-        if (!ctxN || !this.master) break;
-        const o = ctxN.createOscillator();
-        o.type = 'sawtooth';
-        o.frequency.setValueAtTime(110, t);
-        o.frequency.linearRampToValueAtTime(150, t + 0.5);
-        o.frequency.linearRampToValueAtTime(95, t + 0.9);
-        const f = ctxN.createBiquadFilter();
-        f.type = 'bandpass';
-        f.frequency.value = 900;
-        f.Q.value = 6;
-        const g = ctxN.createGain();
-        g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(0.09, t + 0.1);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.95);
-        o.connect(f).connect(g).connect(this.master);
-        o.start(t);
-        o.stop(t + 1);
-        [261.6, 329.6, 392, 523.3].forEach((hz, k) => this.tone(t + 0.9 + k * 0.12, 2.2, hz, 0.07));
-        break;
-      }
     }
   }
 

@@ -174,7 +174,7 @@ export const useGame = () => {
       return;
     }
     const crossing = cell.c === board.door.c && cell.r === board.door.r;
-    sound.play(crossing ? 'cross' : 'step');
+    sound.play(crossing ? 'door' : 'step');
     if (crossing) {
       pendingCross.current = api.cross(day.day, walked);
       pendingCross.current.catch(() => undefined);
