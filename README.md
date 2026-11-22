@@ -57,16 +57,31 @@ Late players can still cross and enjoy reading the graves; they just can't claim
 
 After crossing you can choose to **wear your title as subreddit flair** (for example *Trailblazer · Here Lies day 2*). It is never set without pressing the button.
 
-### Difficulty rises through the week
+### A new room every day
+
+Every day is a different room, the same for everyone. Each week the dungeon deals seven floor plans in a fresh order, so no shape repeats within a week:
+
+- a plain hall
+- a narrow gallery
+- pillars
+- walls that pinch in at the middle
+- a wall down the middle
+- a caved-in corner
+- rubble from a collapse
+
+Every room also gets a name, like *The Drowned Gallery* or *The Weeping Narrows*. The name is shown on the parchment and in shared results, so players can talk about "yesterday's Drowned Gallery". Solid rock is never a pit and never a step. The rules never change; the floor plan does.
+
+### A gentle weekly rhythm
+
+The game is meant to be bite-sized, so even the hardest day never needs more than five two-number deductions.
 
 | Day | Tier | What it means |
 |---|---|---|
-| Monday, Tuesday | Gentle | Fewer pits; reading single numbers is mostly enough |
-| Wednesday, Thursday | Tricky | You will need to compare neighbouring numbers |
-| Friday, Saturday | Cruel | More pits, more cross-checking |
-| Sunday | Brutal | The hardest crossing of the week |
+| Monday, Tuesday | Gentle | Reading single numbers is mostly enough. The dead mostly tell the truth. |
+| Wednesday, Thursday, Sunday | Tricky | You will need to compare neighbouring numbers. Some of the dead lie. |
+| Friday, Saturday | Cruel | More pits and more cross-checking. Most forgotten slabs lie. |
 
-The day's tier is shown at the top of the game and in the post preview.
+Every room is checked by a solver that thinks like a careful player: it can always be crossed on logic alone, with no guessing and no need to trust a slab. The tier and its one-line hint are shown on the parchment before you step in.
 
 ---
 
