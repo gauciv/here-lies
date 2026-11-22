@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { START, cellOf, generateBoard, idx, isStep, type Board, type Cell } from '../../shared/board';
 import type { Direction } from '../../shared/epitaphs';
-import type { CrossResponse, DayDto, EpitaphDto, FallResponse, GraveDto, MeDto, Vote } from '../../shared/api';
+import type { CrossResponse, DayDto, FallResponse, GraveDto, MeDto } from '../../shared/api';
 import { loadApi, type GameApi } from '../api';
 import { isLit, type Phase } from '../engine/scene';
 import { sound } from '../engine/sound';
@@ -10,6 +10,7 @@ export type Card =
   | { kind: 'none' }
   | { kind: 'grave'; i: number }
   | { kind: 'carve'; i: number }
+  | { kind: 'fellAgain'; reason: 'carvedToday' | 'stoneTaken' }
   | { kind: 'crossed' }
   | { kind: 'spent' };
 
@@ -24,7 +25,6 @@ export type GameState = {
   player: Cell;
   phase: Phase;
   card: Card;
-  details: Map<number, EpitaphDto[]>;
   toast: string | null;
   walkedThisRun: number;
 };
@@ -47,7 +47,6 @@ export const useGame = () => {
     player: START,
     phase: 'idle',
     card: { kind: 'none' },
-    details: new Map(),
     toast: null,
     walkedThisRun: 0,
   });
@@ -95,22 +94,9 @@ export const useGame = () => {
     return () => { alive = false; };
   }, []);
 
-  const openGrave = useCallback(async (i: number) => {
+  const openGrave = useCallback((i: number) => {
     setS((p) => ({ ...p, card: { kind: 'grave', i } }));
-    const api = apiRef.current;
-    const day = s.day?.day;
-    if (!api || day === undefined) return;
-    try {
-      const detail = await api.grave(day, i);
-      setS((p) => {
-        const details = new Map(p.details);
-        details.set(i, detail.epitaphs);
-        return { ...p, details, graves: putGrave(p.graves, detail.grave) };
-      });
-    } catch {
-      /* the summary card still works without the list */
-    }
-  }, [s.day?.day]);
+  }, []);
 
   const tap = useCallback((cell: Cell) => {
     const { board, phase, card, player, graves, day } = s;
@@ -129,7 +115,7 @@ export const useGame = () => {
       // fall through to the step below; slabs are walkable
     } else {
       // graves can only be read where the torch (or the dawn) shows them
-      if (g && (darkLifted || isLit(player, cell))) { void openGrave(i); return; }
+      if (g && (darkLifted || isLit(player, cell))) { openGrave(i); return; }
       if (phase === 'walking' && card.kind === 'none') { sound.play('deny'); toast('Step onto a stone next to you.'); }
       return;
     }
@@ -156,7 +142,7 @@ export const useGame = () => {
       return { ...p, player: cell, revealed, phase: crossing ? 'crossing' : 'walking', walkedThisRun: p.walkedThisRun + 1 };
     });
     // stepping onto a slab reads it
-    if (g && !crossing && g.carved > 0) window.setTimeout(() => void openGrave(i), 200);
+    if (g && !crossing && g.top) window.setTimeout(() => openGrave(i), 200);
   }, [s, openGrave, toast]);
 
   const resetRun = (p: GameState): GameState => {
@@ -168,7 +154,14 @@ export const useGame = () => {
     try {
       const res = await pendingFall.current;
       if (!res) return;
-      setS((p) => ({ ...p, me: res.me, day: res.day, graves: putGrave(p.graves, res.grave), phase: 'fallen', card: { kind: 'carve', i: res.grave.i } }));
+      // carve only if this is your first carving today on a stone nobody has claimed
+      const card: Card = res.me.uncarved !== null
+        ? { kind: 'carve', i: res.grave.i }
+        : res.me.candles <= 0
+          ? { kind: 'spent' }
+          : { kind: 'fellAgain', reason: res.me.myArrow ? 'carvedToday' : 'stoneTaken' };
+      const phase: Phase = res.me.uncarved === null && res.me.candles <= 0 ? 'idle' : 'fallen';
+      setS((p) => ({ ...p, me: res.me, day: res.day, graves: putGrave(p.graves, res.grave), phase, card }));
     } catch (e) {
       toast(e instanceof Error ? e.message : 'The dark swallowed that step.');
       setS((p) => resetRun(p));
@@ -201,24 +194,6 @@ export const useGame = () => {
       toast(e instanceof Error ? e.message : 'The chisel slipped. Try again.');
     }
   }, [s, toast]);
-
-  const vote = useCallback(async (id: string, v: Vote) => {
-    const api = apiRef.current;
-    const day = s.day;
-    if (!api || !day) return;
-    try {
-      sound.play('vote');
-      const res = await api.vote(day.day, id, v);
-      setS((p) => {
-        const details = new Map(p.details);
-        const list = details.get(res.grave.i);
-        if (list) details.set(res.grave.i, list.map((e) => (e.id === id ? res.epitaph : e)));
-        return { ...p, details, graves: putGrave(p.graves, res.grave) };
-      });
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Your judgement was lost in the dark.');
-    }
-  }, [s.day, toast]);
 
   const share = useCallback(async (): Promise<boolean> => {
     const api = apiRef.current;
@@ -267,7 +242,7 @@ export const useGame = () => {
     if (s.status !== 'ready') return '';
     if (s.phase === 'falling') return 'The stone gives way…';
     if (s.phase === 'crossing') return 'The gate opens.';
-    if (s.phase === 'crossed' || s.phase === 'idle') return s.graves.size ? 'The dark has lifted. Tap any grave to judge it.' : '';
+    if (s.phase === 'crossed' || s.phase === 'idle') return s.graves.size ? 'The dark has lifted. Tap a slab to see if its arrow lied.' : '';
     if (s.phase !== 'walking') return '';
     const seen = s.revealed.size;
     if (seen <= 1 && s.walkedThisRun === 0) return 'Reach the light under the far door. Tap a glowing stone to step.';
@@ -276,5 +251,9 @@ export const useGame = () => {
     return 'Reach the far wall.';
   }, [s.status, s.phase, s.revealed.size, s.walkedThisRun, s.graves.size]);
 
-  return { s, tap, onFallDone, onCrossDone, carve, vote, share, join, flair, closeCard, openGrave, hint };
+  const walkAgain = useCallback(() => {
+    setS((p) => (p.card.kind === 'fellAgain' ? resetRun(p) : p));
+  }, []);
+
+  return { s, tap, onFallDone, onCrossDone, carve, share, join, flair, walkAgain, closeCard, hint };
 };

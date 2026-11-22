@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { CANDLES_PER_DAY, dayStartUtc } from '../../shared/board';
-import { directionName, isForgotten, validDirections, verdictOf, type Direction, type Verdict } from '../../shared/epitaphs';
-import type { Cell } from '../../shared/board';
+import { arrowIsTrue, directionName, isForgotten, validDirections, type Direction } from '../../shared/epitaphs';
+import type { Board, Cell } from '../../shared/board';
 import { arrowRows } from '../engine/sprites';
 import type { ColorKey } from '../engine/palette';
 import { PixelIcon } from './PixelIcon';
-import type { DayDto, EpitaphDto, GraveDto, MeDto, Vote } from '../../shared/api';
+import type { DayDto, GraveDto, MeDto, MyArrowDto } from '../../shared/api';
 import { shareText } from '../../shared/share';
 import { pioneerTitle } from '../../shared/pioneer';
 import { context } from '@devvit/web/client';
@@ -60,20 +60,26 @@ const ShareBlock = ({ me, day, onShare, onJoin }: { me: MeDto; day: DayDto } & S
   );
 };
 
-const VERDICT_LABEL: Record<Verdict, string> = {
-  trusted: 'Trusted',
-  liar: 'Known liar',
-  disputed: 'Disputed',
-  unjudged: 'Unjudged',
-};
-
 const who = (user: string, me: MeDto): string =>
   user === me.username ? 'you' : isForgotten(user) ? 'a forgotten soul' : `u/${user}`;
 
-const VERDICT_INK: Record<Verdict, ColorKey> = { trusted: 'warm4', liar: 'red2', disputed: 'pst1', unjudged: 'pst1' };
-
 const Arrow = ({ dir, color, size }: { dir: Direction; color: ColorKey; size: number }) => (
   <PixelIcon rows={arrowRows(dir)} legend={{ '#': color }} size={size} title={`arrow pointing ${directionName(dir)}`} />
+);
+
+const times = (n: number): string => (n === 1 ? '1 walker' : `${n} walkers`);
+
+/** What your own arrow did today; the verdict is revealed once your run is over. */
+const ArrowRecord = ({ mine }: { mine: MyArrowDto }) => (
+  <div className="arrow-record">
+    <span className="slab-arrow slab-arrow-sm"><Arrow dir={mine.arrow} color={mine.truthful ? 'warm4' : 'red2'} size={3} /></span>
+    <p className="card-meta">
+      Your arrow {mine.truthful ? 'told the truth' : 'lied'}.{' '}
+      {mine.truthful
+        ? mine.saved ? `It has saved ${times(mine.saved)} so far.` : 'Nobody has heeded it yet.'
+        : mine.fooled ? `It has fooled ${times(mine.fooled)} so far.` : 'Nobody has fallen for it yet.'}
+    </p>
+  </div>
 );
 
 const ordinal = (n: number): string => {
@@ -95,28 +101,13 @@ const useCountdown = (day: number): string => {
   return `${h}h ${m.toString().padStart(2, '0')}m`;
 };
 
-const VoteRow = ({ e, me, onVote }: { e: EpitaphDto; me: MeDto; onVote: (id: string, v: Vote) => void }) => {
-  const own = e.user === me.username;
-  const voted = e.myVote !== null;
-  return (
-    <div className="vote-row">
-      <button className={`btn btn-honest${e.myVote === 'honest' ? ' is-picked' : ''}`} disabled={own || voted} onClick={() => onVote(e.id, 'honest')}>
-        Honest <span className="count">{e.honest}</span>
-      </button>
-      <button className={`btn btn-liar${e.myVote === 'liar' ? ' is-picked' : ''}`} disabled={own || voted} onClick={() => onVote(e.id, 'liar')}>
-        Liar <span className="count">{e.liar}</span>
-      </button>
-    </div>
-  );
-};
-
-export const GraveCard = ({ grave, list, me, onVote, onClose }: {
-  grave: GraveDto; list: EpitaphDto[] | undefined; me: MeDto; onVote: (id: string, v: Vote) => void; onClose: () => void;
+/** A slab: one arrow. While you walk it is only a claim; after your run, the truth. */
+export const GraveCard = ({ grave, me, board, judged, onClose }: {
+  grave: GraveDto; me: MeDto; board: Board; judged: boolean; onClose: () => void;
 }) => {
   const top = grave.top;
-  const others = (list ?? []).filter((e) => e.id !== top?.id);
-  const verdict = top ? verdictOf(top.honest, top.liar) : 'unjudged';
-  const fellHere = grave.falls === 1 ? 'Fell from this stone' : `${grave.falls} fell from this stone`;
+  const fellHere = grave.falls === 1 ? '1 fell from this stone' : `${grave.falls} fell from this stone`;
+  const truth = top && judged ? arrowIsTrue(board, grave.i, top.arrow) : null;
   return (
     <section className="card" aria-label="Grave slab">
       <button className="card-close" onClick={onClose} aria-label="Close">×</button>
@@ -124,39 +115,44 @@ export const GraveCard = ({ grave, list, me, onVote, onClose }: {
         <>
           <p className="card-kicker">Here lies {who(top.user, me)}</p>
           <div className="slab-read">
-            <span className="slab-arrow"><Arrow dir={top.arrow} color={VERDICT_INK[verdict]} size={6} /></span>
+            <span className="slab-arrow"><Arrow dir={top.arrow} color={truth === true ? 'warm4' : truth === false ? 'red2' : 'pst1'} size={6} /></span>
             <p className="epitaph">“The pit is {directionName(top.arrow)}.”</p>
           </div>
-          <p className="card-meta">
-            {fellHere} · {isForgotten(top.user) ? 'long before today' : `on step ${top.step}`} · <span className={`verdict verdict-${verdict}`}>{VERDICT_LABEL[verdict]}</span>
-          </p>
-          <VoteRow e={top} me={me} onVote={onVote} />
-          {others.length > 0 && (
-            <details className="more">
-              <summary>{others.length} more {others.length === 1 ? 'arrow' : 'arrows'} carved here</summary>
-              <ul>
-                {others.map((e) => (
-                  <li key={e.id}>
-                    <span className="more-text">
-                      <Arrow dir={e.arrow} color={VERDICT_INK[verdictOf(e.honest, e.liar)]} size={3} /> {directionName(e.arrow)}
-                    </span>
-                    <span className="more-who">{who(e.user, me)} · {e.honest} honest · {e.liar} liar</span>
-                    {e.myVote === null && e.user !== me.username && <VoteRow e={e} me={me} onVote={onVote} />}
-                  </li>
-                ))}
-              </ul>
-            </details>
+          {truth !== null ? (
+            <p className={`stamp ${truth ? 'stamp-true' : 'stamp-lie'}`}>
+              {truth ? `True · saved ${times(top.saved)}` : `A lie · fooled ${times(top.fooled)}`}
+            </p>
+          ) : (
+            <p className="card-meta">Is it the truth? You'll know when your run is over.</p>
           )}
+          <p className="card-foot">{fellHere}{isForgotten(top.user) ? ' · long before today' : ` · on step ${top.step}`}</p>
         </>
       ) : (
         <>
           <p className="card-kicker">{fellHere}</p>
-          <p className="epitaph epitaph-silent">Nothing is carved yet.</p>
+          <p className="epitaph epitaph-silent">Nothing is carved here.</p>
         </>
       )}
     </section>
   );
 };
+
+/** You fell, but this fall can't carve: say why, then send them back to the stairs. */
+export const FellAgainCard = ({ me, reason, onWalk }: { me: MeDto; reason: 'carvedToday' | 'stoneTaken'; onWalk: () => void }) => (
+  <section className="card" aria-label="You fell">
+    <p className="card-kicker">The dark takes you</p>
+    <p className="epitaph">You fell.</p>
+    <p className="card-meta">
+      {reason === 'carvedToday'
+        ? 'You already carved your one arrow today, so this fall leaves no new mark.'
+        : 'Someone already carved an arrow on the stone you stood on. Your fall only adds to its count.'}
+    </p>
+    <div className="vote-row">
+      <button className="btn btn-share" onClick={onWalk}>Walk again</button>
+    </div>
+    <p className="card-foot">{me.candles} of {CANDLES_PER_DAY} candles left.</p>
+  </section>
+);
 
 /** Compass layout: grid position → direction (null = the slab itself). */
 const COMPASS: readonly (Direction | null)[] = [7, 0, 1, 6, null, 2, 5, 4, 3];
@@ -219,6 +215,7 @@ export const CrossedCard = ({ me, day, onClose, onShare, onJoin, onFlair }: { me
         <div><dt>Candles</dt><dd>{me.candles}/{CANDLES_PER_DAY}</dd></div>
         <div><dt>Streak</dt><dd>{me.streak}</dd></div>
       </dl>
+      {me.myArrow && <ArrowRecord mine={me.myArrow} />}
       <ShareBlock me={me} day={day} onShare={onShare} onJoin={onJoin} />
       <p className="card-foot">{day.fallen} lie behind you. A new crossing opens in {countdown}.</p>
     </section>
@@ -232,7 +229,8 @@ export const SpentCard = ({ me, day, onClose, onShare, onJoin }: { me: MeDto; da
       <button className="card-close" onClick={onClose} aria-label="Close">×</button>
       <p className="card-kicker">Your candles are spent</p>
       <p className="epitaph">Rest now.</p>
-      <p className="card-meta">Your graves will guide, or mislead, everyone who walks today. You can still judge the dead: tap any grave.</p>
+      <p className="card-meta">The dark has lifted: every pit is shown, and every arrow is revealed as truth or lie. Tap any slab.</p>
+      {me.myArrow && <ArrowRecord mine={me.myArrow} />}
       <ShareBlock me={me} day={day} onShare={onShare} onJoin={onJoin} />
       <p className="card-foot">{day.crossed} crossed · {day.fallen} fell · new crossing in {countdown}</p>
     </section>

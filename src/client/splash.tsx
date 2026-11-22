@@ -86,7 +86,7 @@ export const Splash = () => {
   const scene = useMemo<SceneState>(() => {
     const graves = new Map<number, GraveView>();
     init?.graves.forEach((g) => {
-      graves.set(g.i, { arrow: g.top?.arrow ?? null, falls: g.falls, honest: g.top?.honest ?? 0, liar: g.top?.liar ?? 0, carved: g.carved > 0, mine: g.mine });
+      graves.set(g.i, { arrow: g.top?.arrow ?? null, falls: g.falls, mine: g.mine, truth: null });
     });
     return {
       board: generateBoard(day),
