@@ -17,6 +17,7 @@ FRAMES = (
     + [f'wall_fountain_mid_red_anim_f{i}' for i in range(3)]
     + [f'wall_fountain_basin_red_anim_f{i}' for i in range(3)]
     + ['doors_frame_left', 'doors_frame_right', 'doors_frame_top', 'doors_leaf_closed', 'doors_leaf_open']
+    + ['crate', 'chest_full_open_anim_f0', 'flask_big_red', 'flask_big_blue', 'flask_green', 'column', 'wall_banner_green']
     + [f'{HERO}_idle_anim_f{i}' for i in range(4)]
     + [f'{HERO}_run_anim_f{i}' for i in range(4)]
 )
