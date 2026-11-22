@@ -34,6 +34,19 @@ Compare numbers as you walk. If you stand on a **1** and the stone you came from
 
 Each day's dungeon is checked by a solver that plays like a careful person: it only steps onto stones it can prove are safe from the numbers, and it never uses graves. A board is published only if that solver reaches the door. **Luck is never required.** Graves are a shortcut: trusting a truthful one saves time, trusting a liar costs a candle.
 
+### Pioneer score: cross early, earn glory
+
+Graves make the board easier as the day goes on, so crossing late is not the same as crossing at dawn. When you cross, your **Pioneer score** is the share of the day's pits that other players had **not** yet found. Your own falls and the seeded forgotten graves never count against you.
+
+| Pioneer | Title |
+|---|---|
+| 90–100% | Trailblazer |
+| 60–89% | Pathfinder |
+| 30–59% | Wayfarer |
+| under 30% | Grave-walker |
+
+Late players can still cross and enjoy reading the graves; they just can't claim to have blazed the trail.
+
 ### Difficulty rises through the week
 
 | Day | Tier | What it means |
