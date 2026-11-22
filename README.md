@@ -17,7 +17,8 @@ Built for Reddit's Game of the Day Hackathon on Devvit Web.
 5. **When you fall, carve an arrow.** Your grave slab goes on the stone you stood on just before you fell. Pick which way the arrow points: at the pit (the truth), or anywhere else (a lie). You always see which way you really fell, so a lie is a choice.
 6. **Read the slabs in your torchlight.** A slab means *someone stepped off this stone into a pit next to it*, but which neighbour? Only the arrow says, and it may lie. Slabs are safe to stand on; stepping onto one reads it. Tap a lit slab from a distance to read it too.
    - **One arrow per stone:** the first person to fall from a stone carves it. Later falls from that stone only add to its count.
-   - **One arrow per player per day:** you carve the first time you fall from an uncarved stone. Your other falls leave no new mark.
+   - **One arrow per player per day,** and it's your choice when: you may **skip** carving on your first and second falls, but **your last candle must carve**, so nobody leaves without a mark. If that last stone already has an arrow, yours replaces it.
+   - **Graves crumble.** Every walker who stands on a slab cracks it a little more; after **5 walkers** it crumbles to dust. Every arrow gets the same five tests no matter when it was carved, so carving early is never a disadvantage, and the board never fills up. At most 6 arrows are ever on the board.
 7. **You remember your own falls.** A pit you fell into stays open for you (and only you) for the rest of the day.
 8. When you cross, or your candles run out, **the dark lifts**: every real pit appears and every arrow is stamped **true** (gold) or **a lie** (red). The game counts how many walkers each arrow **saved** or **fooled**, and your end screen tells you what your own arrow did. You can also choose to share your result as a comment or join the community.
 
