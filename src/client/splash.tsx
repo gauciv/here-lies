@@ -1,61 +1,127 @@
 import './index.css';
 
-import { navigateTo } from '@devvit/web/client';
-import { context, requestExpandedMode } from '@devvit/web/client';
-import { StrictMode } from 'react';
+import { StrictMode, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import { createRoot } from 'react-dom/client';
+import { requestExpandedMode } from '@devvit/web/client';
+import { START, dayNumber, difficultyOf, generateBoard, idx } from '../shared/board';
+import type { InitResponse } from '../shared/api';
+import { loadApi } from './api';
+import { dateLabel } from './game/format';
+import { SCENE_W, Scene, TILE, TOP, type GraveView, type SceneState } from './engine/scene';
+
+const isLocalPreview = () => ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+const open = (e: MouseEvent | PointerEvent) => {
+  if (isLocalPreview()) {
+    window.location.assign('game.html'); // no Reddit host locally
+    return;
+  }
+  try {
+    requestExpandedMode(e.nativeEvent, 'game');
+  } catch (err) {
+    console.error('could not open the game', err);
+  }
+};
+
+/** Where the torchlight sits in scene pixels: just above the entry stone. */
+const LIT_Y = TOP + START.r * TILE - 6;
+
+/** A close-up "camera" on the dwarf at the stairs, framed for a feed post. */
+const SplashScene = ({ scene }: { scene: SceneState }) => {
+  const wrap = useRef<HTMLDivElement>(null);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const engine = useRef<Scene | null>(null);
+  const [frame, setFrame] = useState({ k: 4, left: 0, top: 0 });
+
+  useEffect(() => {
+    if (!canvas.current) return;
+    const sc = new Scene(canvas.current);
+    engine.current = sc;
+    sc.start();
+    return () => sc.stop();
+  }, []);
+
+  useEffect(() => { engine.current?.setState(scene); }, [scene]);
+
+  useLayoutEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const fit = () => {
+      const w = el.clientWidth, h = el.clientHeight;
+      const k = Math.max(3, Math.min(5, Math.round(h / 128)));
+      setFrame({ k, left: Math.round((w - SCENE_W * k) / 2), top: Math.round(h * 0.7 - LIT_Y * k) });
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div ref={wrap} className="splash-cam">
+      <canvas
+        ref={canvas}
+        className="scene"
+        style={{ position: 'absolute', left: frame.left, top: frame.top, width: SCENE_W * frame.k }}
+        aria-hidden="true"
+      />
+    </div>
+  );
+};
 
 export const Splash = () => {
+  const [init, setInit] = useState<InitResponse | null>(null);
+  const day = init?.day.day ?? dayNumber();
+  const diff = difficultyOf(day);
+
+  useEffect(() => {
+    let alive = true;
+    void loadApi()
+      .then((api) => api.init())
+      .then((res) => { if (alive) setInit(res); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
+
+  const scene = useMemo<SceneState>(() => {
+    const graves = new Map<number, GraveView>();
+    init?.graves.forEach((g) => {
+      graves.set(g.i, { falls: g.falls, honest: g.top?.honest ?? 0, liar: g.top?.liar ?? 0, carved: g.carved > 0, mine: g.mine });
+    });
+    return {
+      board: generateBoard(day),
+      revealed: new Set([idx(START.c, START.r)]),
+      player: START,
+      graves,
+      phase: 'walking',
+      revealAll: false,
+    };
+  }, [day, init]);
+
+  const me = init?.me;
+  const cta = me?.crossed ? "See today's graves" : me && me.candles <= 0 ? 'Judge the dead' : 'Enter the dungeon';
+
   return (
-    <div className="flex relative flex-col justify-center items-center min-h-screen gap-4 bg-white dark:bg-gray-900">
-      <img
-        className="object-contain w-1/2 max-w-[250px] mx-auto"
-        src="/snoo.png"
-        alt="Snoo"
-      />
-      <div className="flex flex-col items-center gap-2">
-        <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-white">
-          Hey {context.username ?? 'user'} 👋
-        </h1>
-        <p className="text-base text-center text-gray-600 dark:text-gray-300">
-          Edit{' '}
-          <span className="bg-[#e5ebee] dark:bg-gray-700 px-1 py-0.5 rounded">
-            src/client/splash.tsx
-          </span>{' '}
-          to get started.
-        </p>
-      </div>
-      <div className="flex items-center justify-center mt-5">
-        <button
-          className="flex items-center justify-center bg-[#d93900] dark:bg-orange-600 text-white w-auto h-10 rounded-full cursor-pointer transition-colors px-4 hover:bg-[#c23300] dark:hover:bg-orange-700"
-          onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
-        >
-          Tap to Start
+    <main className="splash" onClick={open}>
+      <SplashScene scene={scene} />
+      <div className="splash-over">
+        <header className="splash-head">
+          <h1 className="logo logo-xl">Here Lies</h1>
+          <p className="hud-sub">
+            Day {day} · {dateLabel(day)} · <b className={`tier tier-${diff.name.toLowerCase()}`}>{diff.name}</b>
+          </p>
+          {init && (
+            <p className="hud-sub">
+              <b className="num-fallen">{init.day.fallen}</b> fell today · <b className="num-crossed">{init.day.crossed}</b> crossed
+            </p>
+          )}
+          <p className="splash-hook">Every grave holds last words.<br />Some of them lie.</p>
+        </header>
+        <button className="btn btn-cta" onClick={(e) => { e.stopPropagation(); open(e); }}>
+          {cta}
         </button>
       </div>
-      <footer className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3 text-[0.8em] text-gray-600 dark:text-gray-400">
-        <button
-          className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-          onClick={() => navigateTo('https://developers.reddit.com/docs')}
-        >
-          Docs
-        </button>
-        <span className="text-gray-300 dark:text-gray-600">|</span>
-        <button
-          className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-          onClick={() => navigateTo('https://www.reddit.com/r/Devvit')}
-        >
-          r/Devvit
-        </button>
-        <span className="text-gray-300 dark:text-gray-600">|</span>
-        <button
-          className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-          onClick={() => navigateTo('https://discord.com/invite/R7yu2wh9Qz')}
-        >
-          Discord
-        </button>
-      </footer>
-    </div>
+    </main>
   );
 };
 
