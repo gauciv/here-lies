@@ -3,8 +3,11 @@ import { COLS, ROWS, generateBoard, idx, isOpen } from '../../shared/board';
 
 const CELL = 30;
 const PAD = 12;
-const W = COLS * CELL + PAD * 2;
-const H = ROWS * CELL + PAD * 2 + 14;
+/** the map's size at zoom 1, in CSS pixels */
+export const MAP_W = COLS * CELL + PAD * 2;
+export const MAP_H = ROWS * CELL + PAD * 2 + 14;
+const W = MAP_W;
+const H = MAP_H;
 const INK = 'rgba(58, 32, 16, 0.88)';
 const RED = '#a3271a';
 
@@ -26,7 +29,7 @@ const mappedGraves = (day: number, graves: readonly number[]): number[] => {
  * the rock, a red X where the door is, a few skulls where others died, and
  * "you" at the stairs. No grid, no numbers, no arrows, no paths.
  */
-export const RoomMap = ({ day, graves }: { day: number; graves: readonly number[] }) => {
+export const RoomMap = ({ day, graves, zoom = 1 }: { day: number; graves: readonly number[]; zoom?: number }) => {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -34,9 +37,10 @@ export const RoomMap = ({ day, graves }: { day: number; graves: readonly number[
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const dpr = Math.min(3, window.devicePixelRatio || 1);
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
+    // drawn at the size it's shown (zoomed or not), so the ink stays sharp
+    const dpr = Math.min(3, window.devicePixelRatio || 1) * zoom;
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const board = generateBoard(day);
     let seed = day * 31;
@@ -115,13 +119,13 @@ export const RoomMap = ({ day, graves }: { day: number; graves: readonly number[
     draw();
     void document.fonts?.load('700 15px Caveat').then(() => { if (alive) { seed = day * 31; draw(); } });
     return () => { alive = false; };
-  }, [day, graves]);
+  }, [day, graves, zoom]);
 
   return (
     <canvas
       ref={ref}
       className="room-map"
-      style={{ width: W, height: H }}
+      style={{ width: Math.round(W * zoom), height: Math.round(H * zoom) }}
       role="img"
       aria-label="A rough map of today's room: the walls, a red X where the door is, a few skulls where others died, and you at the stairs."
     />

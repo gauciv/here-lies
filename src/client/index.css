@@ -328,7 +328,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card, .toast, .scroll, .death, .btn-compass.is-truth { animation: none; }
+  .card, .toast, .scroll, .death, .map-full, .btn-compass.is-truth { animation: none; }
 }
 
 /* ── feed preview (inline launch screen) ─────────── */
@@ -394,6 +394,31 @@ body {
 .rec-streak.is-cold svg { filter: grayscale(1) opacity(0.45); }
 .rec-map { margin: 2px 0 0; display: flex; flex-direction: column; align-items: center; }
 .room-map { display: block; }
+.map-zoom { display: block; padding: 0; border: 0; background: none; cursor: zoom-in; }
+.map-hint { font-size: 16px; line-height: 1; opacity: 0.7; margin-top: 2px; }
+/* the map, zoomed to fill the screen on a sheet of parchment */
+.map-full {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.95);
+  cursor: zoom-out;
+  animation: map-in 0.28s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+@keyframes map-in { from { opacity: 0; scale: 0.55; } to { opacity: 1; scale: 1; } }
+.map-full-sheet {
+  border-style: solid;
+  border-width: 20px 12px;
+  border-image: url('./assets/ui/scroll.png') 18 8 fill / 20px 12px stretch;
+  image-rendering: pixelated;
+  padding: 4px;
+  filter: drop-shadow(0 8px 0 rgba(0, 0, 0, 0.6));
+}
 .room-map-wait { width: 234px; height: 308px; }
 .rec-foot { display: flex; justify-content: space-between; align-items: center; font-size: 22px; font-weight: 700; padding: 0 2px; }
 .rec-foot span { display: inline-flex; align-items: center; gap: 6px; }
