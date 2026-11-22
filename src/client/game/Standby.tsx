@@ -9,16 +9,21 @@ import { RoomMap } from './RoomMap';
 export type StandbyHandle = { enter: (onDone: () => void, onCue?: (cue: CampCue) => void) => void };
 
 /** The resting room, scaled to whole pixels so the art stays crisp. */
-const CampCanvas = forwardRef<StandbyHandle, { maxScale?: number }>(({ maxScale = 4 }, ref) => {
+type Revival = { onDone: () => void; onCue: (cue: CampCue) => void };
+
+const CampCanvas = forwardRef<StandbyHandle, { maxScale?: number; revival?: Revival | undefined }>(({ maxScale = 4, revival }, ref) => {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const scene = useRef<CampScene | null>(null);
   const [scale, setScale] = useState(3);
+  // read once, when the scene is made: a revival only ever plays on arrival
+  const revivalRef = useRef(revival);
 
   useEffect(() => {
     if (!canvas.current) return;
     const s = new CampScene(canvas.current);
     scene.current = s;
+    if (revivalRef.current) s.revive(revivalRef.current.onDone, revivalRef.current.onCue);
     s.start();
     return () => s.stop();
   }, []);
@@ -97,17 +102,24 @@ const Record = ({ day, me }: { day: DayDto | null; me: MeDto | null }) => {
  */
 export const Standby = forwardRef<StandbyHandle, {
   day: DayDto | null; me: MeDto | null; busy: boolean; onEnter: (e: MouseEvent) => void; onReview: (e: MouseEvent) => void; compact?: boolean;
-}>(({ day, me, busy, onEnter, onReview, compact = false }, ref) => {
+  /** play the soul's homecoming first, and keep the screen bare until it's over */
+  revival?: Revival | undefined;
+}>(({ day, me, busy, onEnter, onReview, compact = false, revival }, ref) => {
   const [open, setOpen] = useState(false);
+  const [bare, setBare] = useState(!!revival);
+  const [revivalOnce] = useState<Revival | undefined>(() => revival && {
+    onCue: revival.onCue,
+    onDone: () => { setBare(false); revival.onDone(); },
+  });
   const finished = !!me && (me.crossed || me.candles <= 0) && me.uncarved === null;
   return (
-    <div className={`standby${compact ? ' standby-compact' : ''}`}>
+    <div className={`standby${compact ? ' standby-compact' : ''}${bare ? ' is-bare' : ''}`}>
       <header className="camp-head">
         <h1 className="camp-title">Here Lies</h1>
         {day && <p className="camp-room">{day.room}</p>}
       </header>
       <div className="camp-middle">
-        <CampCanvas ref={ref} maxScale={compact ? 3 : 4} />
+        <CampCanvas ref={ref} maxScale={compact ? 3 : 4} revival={revivalOnce} />
         {open && <Record day={day} me={me} />}
       </div>
       <div className="camp-actions">

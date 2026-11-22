@@ -8,6 +8,7 @@ import campfireUrl from '../assets/campfire.png';
 import atlasUrl from '../assets/dungeon.png';
 import { FRAMES, HERO_IDLE, HERO_RUN, type FrameName } from './atlas';
 import { C, type ColorKey } from './palette';
+import { getSprites } from './sprites';
 
 export const CAMP_W = 112;
 export const CAMP_H = 112;
@@ -22,11 +23,19 @@ const HERO_DOOR = { x: 80, y: 6 };
 const FIRE_W = 26;
 const FIRE_H = 37;
 const ENTER_MS = 3600;
+/** the soul's homecoming after a game over */
+const REVIVE_MS = 7200;
+/** where the soul hovers beside the fire, waiting for its body */
+const SOUL_REST = { x: 67, y: 40 };
 /** the dwarf sprite's hand, facing right */
 const HAND = { x: 14, y: 17 };
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
 
-export type CampCue = 'ignite' | 'door';
+export type CampCue = 'ignite' | 'door' | 'revive';
+
+type Light = { x: number; y: number; r: number; k: number; tint: readonly [number, number, number] };
+const COLD: readonly [number, number, number] = [0.55, 0.78, 1.05];
+const TORCH_TINT: readonly [number, number, number] = [1, 0.72, 0.45];
 
 const load = (src: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
@@ -59,6 +68,9 @@ export class CampScene {
   private onCue: ((cue: CampCue) => void) | null = null;
   private cued = new Set<CampCue>();
   private sparks: Spark[] = [];
+  private reviveT0 = -1;
+  private onRevived: (() => void) | null = null;
+  private pale = new Map<FrameName, HTMLCanvasElement>();
   private lastT = 0;
   private readonly reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -91,6 +103,60 @@ export class CampScene {
     this.onEntered = onDone;
     this.onCue = onCue ?? null;
     this.cued.clear();
+  }
+
+  /**
+   * After a game over: the soul drifts out of the door to the fire, its pale,
+   * hollow-eyed body follows, and the two become one again. Nothing else on
+   * screen until it's done.
+   */
+  revive(onDone: () => void, onCue?: (cue: CampCue) => void): void {
+    if (this.reduced) { onDone(); return; }
+    this.reviveT0 = performance.now();
+    this.onRevived = onDone;
+    this.onCue = onCue ?? null;
+    this.cued.clear();
+  }
+
+  /** The dwarf without his soul: drained to ash, with black hollows for eyes. */
+  private paleFrame(name: FrameName): HTMLCanvasElement | null {
+    const cached = this.pale.get(name);
+    if (cached) return cached;
+    if (!this.atlas) return null;
+    const [sx, sy, w, h] = FRAMES[name];
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const x = cv.getContext('2d');
+    if (!x) return null;
+    x.drawImage(this.atlas, sx, sy, w, h, 0, 0, w, h);
+    const img = x.getImageData(0, 0, w, h);
+    const d = img.data;
+    const at = (px: number, py: number) => (py * w + px) * 4;
+    const isInk = (o: number) => d[o + 3]! > 0 && d[o]! < 60 && d[o + 1]! < 60 && d[o + 2]! < 60;
+    const isSkin = (o: number) => d[o + 3]! > 0 && d[o]! > 180 && d[o + 1]! > 130 && d[o + 2]! > 100 && d[o + 1]! < 200;
+    // the eyes: dark pixels sitting in the face, with skin beside them
+    const eyes: number[] = [];
+    for (let py = 0; py < h; py++)
+      for (let px = 1; px < w - 1; px++) {
+        const o = at(px, py);
+        if (isInk(o) && (isSkin(at(px - 1, py)) || isSkin(at(px + 1, py))) && py > 12 && py < 22) eyes.push(px, py);
+      }
+    for (let o = 0; o < d.length; o += 4) {
+      if (d[o + 3] === 0 || isInk(o)) continue;
+      const lum = 0.3 * d[o]! + 0.59 * d[o + 1]! + 0.11 * d[o + 2]!;
+      const v = 0.45 * lum + 105;
+      d[o] = v - 8; d[o + 1] = v - 2; d[o + 2] = v + 14;
+    }
+    for (let k = 0; k < eyes.length; k += 2) {
+      const ex = eyes[k]!, ey = eyes[k + 1]!;
+      for (const [ox, oy] of [[0, 0], [0, -1]] as const) {
+        const o = at(ex + ox, ey + oy);
+        d[o] = 6; d[o + 1] = 7; d[o + 2] = 11; d[o + 3] = 255;
+      }
+    }
+    x.putImageData(img, 0, 0);
+    this.pale.set(name, cv);
+    return cv;
   }
 
   private cue(c: CampCue): void {
@@ -150,6 +216,26 @@ export class CampScene {
     this.lastT = t;
     const p = this.enterT0 >= 0 ? Math.min(1, (now - this.enterT0) / ENTER_MS) : -1;
     if (p >= 1 && this.onEntered) { const done = this.onEntered; this.onEntered = null; done(); }
+    const q = this.reviveT0 >= 0 ? Math.min(1, (now - this.reviveT0) / REVIVE_MS) : -1;
+    if (q >= 1 && this.onRevived) { const done = this.onRevived; this.onRevived = null; this.reviveT0 = -1; done(); }
+    const reviving = q >= 0 && q < 1;
+    if (reviving) {
+      this.cue('door');
+      if (q >= 0.82) this.cue('revive');
+    }
+    // the soul: out of the door, down to the fireside, then into the body
+    const soulIn = ease(span(q, 0.04, 0.34));
+    const merge = ease(span(q, 0.74, 0.86));
+    const soul = {
+      x: lerp(lerp(HERO_DOOR.x, SOUL_REST.x, soulIn), HERO_REST.x, merge),
+      y: lerp(lerp(HERO_DOOR.y, SOUL_REST.y, soulIn), HERO_REST.y + 2, merge),
+    };
+    const soulAlpha = reviving ? Math.min(1, span(q, 0.03, 0.12) * 1.2) * (1 - span(q, 0.8, 0.87)) : 0;
+    // the body: out of the dark doorway, across to where the soul waits
+    const bodyWalk = ease(span(q, 0.46, 0.74));
+    const bodyShown = !reviving || q >= 0.46;
+    const colour = reviving ? ease(span(q, 0.84, 0.97)) : 1;
+    const doorOpenRevive = reviving && q >= 0.02 && q < 0.9;
 
     // ── the sequence: reach into the fire, light the torch, walk to the door ──
     const entering = p >= 0;
@@ -166,8 +252,14 @@ export class CampScene {
       hy = lerp(HERO_REST.y, HERO_DOOR.y, walk);
     }
     if (through > 0) hy = HERO_DOOR.y - 14 * through;
-    const facingDoor = p >= 0.44;
-    const running = walk > 0 && walk < 1 || through > 0;
+    let facingDoor = p >= 0.44;
+    let running = walk > 0 && walk < 1 || through > 0;
+    if (reviving) {
+      hx = lerp(HERO_DOOR.x, HERO_REST.x, bodyWalk);
+      hy = lerp(HERO_DOOR.y, HERO_REST.y, bodyWalk);
+      running = bodyWalk > 0 && bodyWalk < 1;
+      facingDoor = false;
+    }
 
     // where the torch is: upright in the hand, dipped into the flames while lighting
     const handX = Math.round(hx) + (facingDoor ? HAND.x : T - 1 - HAND.x);
@@ -185,8 +277,9 @@ export class CampScene {
     }
     const dx = DOOR_C * T - 8;
     // the open leaf's doorway is see-through: black it out, or the wall shows through
-    if (p >= 0.72) this.px('void0', dx + 3, 3, 26, 27);
-    this.tile(p >= 0.72 ? 'doors_leaf_open' : 'doors_leaf_closed', dx, 0);
+    const doorOpen = p >= 0.72 || doorOpenRevive;
+    if (doorOpen) this.px('void0', dx + 3, 3, 26, 27);
+    this.tile(doorOpen ? 'doors_leaf_open' : 'doors_leaf_closed', dx, 0);
     this.tile('doors_frame_left', dx - 16, 0);
     this.tile('doors_frame_right', dx + 32, 0);
     for (let r = 2; r < 7; r++) for (let col = 0; col < 7; col++) {
@@ -197,7 +290,7 @@ export class CampScene {
     const flick = this.reduced ? 1 : 1 + 0.07 * Math.sin(t * 8.3) + 0.05 * Math.sin(t * 13.9 + 2) + 0.03 * Math.sin(t * 31);
 
     // the dwarf's shadow, thrown away from the fire and swaying with it
-    if (through === 0) {
+    if (through === 0 && bodyShown) {
       const fx = hx + 8, fy = hy + 27;
       const ax = fx - FIRE_LIGHT.x, ay = fy - FIRE_LIGHT.y;
       const len = Math.hypot(ax, ay) || 1;
@@ -221,12 +314,29 @@ export class CampScene {
 
     // the dwarf: resting, facing the fire; then off to the door with his torch
     const frames = running ? HERO_RUN : HERO_IDLE;
-    const fn = frames[this.reduced ? 0 : Math.floor(now / (running ? 90 : 220)) % 4] ?? 'floor_1';
+    const fn = frames[this.reduced ? 0 : Math.floor(now / (running ? (reviving ? 150 : 90) : 220)) % 4] ?? 'floor_1';
     c.save();
-    if (through > 0) { c.beginPath(); c.rect(0, 12, CAMP_W, CAMP_H); c.clip(); }
-    if (through < 0.95) {
+    if (through > 0 || (reviving && bodyWalk < 0.3)) { c.beginPath(); c.rect(0, 12, CAMP_W, CAMP_H); c.clip(); }
+    if (through < 0.95 && bodyShown) {
       if (entering && facingDoor) this.drawTorch({ x: handX, y: handY }, tip); // carried in front when walking away
-      this.tile(fn, Math.round(hx), Math.round(hy), !facingDoor);
+      if (colour < 1) {
+        // soulless: drawn pale, and colour floods back once the soul is home
+        const pale = this.paleFrame(fn);
+        const bx = Math.round(hx), by = Math.round(hy);
+        if (pale) {
+          c.save();
+          c.translate(bx + T, by);
+          c.scale(-1, 1);
+          c.drawImage(pale, 0, 0);
+          c.restore();
+        }
+        c.save();
+        c.globalAlpha = colour;
+        this.tile(fn, bx, by, true);
+        c.restore();
+      } else {
+        this.tile(fn, Math.round(hx), Math.round(hy), !facingDoor);
+      }
       if (entering && !facingDoor) this.drawTorch({ x: handX, y: handY }, tip);
     }
     c.restore();
@@ -235,7 +345,12 @@ export class CampScene {
     const torchOn = entering && lit && through < 0.9;
     const torchFade = 1 - span(p, 0.86, 0.98);
     const R = 46 * flick;
-    const TR = 30 * flick * torchFade;
+    const lights: Light[] = [];
+    if (torchOn) lights.push({ x: tip.x, y: tip.y, r: 30 * flick * torchFade, k: 1.1, tint: TORCH_TINT });
+    if (soulAlpha > 0) lights.push({ x: soul.x + 8, y: soul.y + 12, r: 24, k: 1.0 * soulAlpha, tint: COLD });
+    if (reviving && bodyShown && colour < 1) lights.push({ x: hx + 8, y: hy + 16, r: 13, k: 0.45 * (1 - colour), tint: COLD });
+    const flash = reviving ? Math.max(0, 1 - Math.abs(q - 0.84) / 0.04) : 0;
+    if (flash > 0) lights.push({ x: HERO_REST.x + 8, y: HERO_REST.y + 14, r: 34, k: 1.6 * flash, tint: [1, 0.95, 0.9] });
     const breathe = this.reduced ? 0 : 1;
     const img = c.getImageData(0, 0, CAMP_W, CAMP_H);
     const d = img.data;
@@ -249,14 +364,15 @@ export class CampScene {
         const dd = (ddx * ddx + ddy * ddy) / (rr * rr);
         let l = 0; // past the firelight: nothing at all
         if (dd < 1) l += (1 - dd) * (1 - dd) * 1.25;
-        let tl = 0;
-        if (torchOn) {
-          const tx = x - tip.x, ty = (y - tip.y) * 1.15;
-          const td = (tx * tx + ty * ty) / (TR * TR);
-          if (td < 1) tl = (1 - td) * (1 - td) * 1.1;
+        let lr = l, lg = 0.68 * l, lb = 0.4 * l;
+        for (const li of lights) {
+          const tx = x - li.x, ty = (y - li.y) * 1.15;
+          const td = (tx * tx + ty * ty) / (li.r * li.r);
+          if (td >= 1) continue;
+          const v = (1 - td) * (1 - td) * li.k;
+          lr += v * li.tint[0]; lg += v * li.tint[1]; lb += v * li.tint[2];
         }
         const th = BAYER[(x & 3) | ((y & 3) << 2)]!;
-        const lr = l + tl, lg = 0.68 * l + 0.72 * tl, lb = 0.4 * l + 0.45 * tl;
         const o = (y * CAMP_W + x) * 4;
         d[o] = Math.min(255, d[o]! * Math.min(1.05, Math.floor(lr * 6 + th) / 6));
         d[o + 1] = Math.min(255, d[o + 1]! * Math.min(1.05, Math.floor(lg * 6 + th) / 6));
@@ -265,7 +381,25 @@ export class CampScene {
     }
     c.putImageData(img, 0, 0);
 
-    // ── emissive: torch flame, sparks of the lighting, embers rising ──
+    // ── emissive: the soul, torch flame, sparks of the lighting, embers rising ──
+    if (soulAlpha > 0) {
+      const frames2 = getSprites().ghost;
+      const sprite = frames2[Math.floor(t * 2.5) % 2]!;
+      const bob = Math.round(Math.sin(t * 2.2) * 1.5 * (1 - merge));
+      const shrink = 1 - 0.5 * merge;
+      const w = Math.round(sprite.w * shrink), h = Math.round(sprite.h * shrink);
+      c.save();
+      c.globalAlpha = 0.85 * soulAlpha;
+      c.translate(Math.round(soul.x + (T - w) / 2) + w, Math.round(soul.y + bob + (28 - h) - 4));
+      c.scale(-1, 1); // facing the fire, like the dwarf
+      c.drawImage(sprite.canvas, 0, 0, w, h);
+      c.restore();
+    }
+    if (flash > 0.6 && this.sparks.length < 18) {
+      for (let k = 0; k < 3; k++) {
+        this.sparks.push({ x: HERO_REST.x + 8, y: HERO_REST.y + 14, vx: (hash2(k, Math.floor(now)) - 0.5) * 60, vy: -30 - hash2(Math.floor(now), k) * 30, life: 0.6 });
+      }
+    }
     if (torchOn && through < 0.6) this.drawFlame(tip.x, tip.y, t);
     if (entering && p >= 0.3 && p < 0.33 && this.sparks.length < 14) {
       for (let k = 0; k < 4; k++) {

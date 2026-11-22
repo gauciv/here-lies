@@ -29,6 +29,8 @@ export const App = () => {
   const [view, setView] = useState<'camp' | 'board'>('camp');
   const [fade, setFade] = useState(false);
   const [entering, setEntering] = useState(false);
+  // back from a game over: the soul's homecoming plays before the camp shows anything
+  const [reviving, setReviving] = useState(false);
   const standby = useRef<StandbyHandle>(null);
   const autoEnter = useRef(consumeAutoEnter());
   const { s, tap, onFallDone, onCrossDone, carve, selectArrow, skip, share, join, flair, walkAgain, leaveRun, openResult, startPlaying, openHelp, closeCard, hint } = useGame();
@@ -101,8 +103,11 @@ export const App = () => {
   if (view === 'camp') {
     return (
       <main className="app" onPointerDown={() => sound.setMode('camp')}>
-        <div className="camp-corner"><MuteButton /></div>
-        <Standby ref={standby} day={s.day} me={s.me} busy={entering || s.status !== 'ready'} onEnter={enter} onReview={() => crossFade('board')} />
+        {!reviving && <div className="camp-corner"><MuteButton /></div>}
+        <Standby
+          ref={standby} day={s.day} me={s.me} busy={entering || s.status !== 'ready'} onEnter={enter} onReview={() => crossFade('board')}
+          revival={reviving ? { onDone: () => setReviving(false), onCue: (cue) => sound.play(cue) } : undefined}
+        />
         <div className={`screen-fade${fade ? ' on' : ''}`} />
       </main>
     );
@@ -119,7 +124,7 @@ export const App = () => {
             )}
             {card.kind === 'intro' && <IntroCard onStart={startPlaying} />}
             {card.kind === 'fellAgain' && <FellAgainCard me={s.me} onWalk={walkAgain} />}
-            {card.kind === 'gameOver' && <GameOverCard onCamp={() => { leaveRun(); crossFade('camp'); }} />}
+            {card.kind === 'gameOver' && <GameOverCard onCamp={() => { leaveRun(); setReviving(true); crossFade('camp'); }} />}
             {card.kind === 'carve' && s.board && (
               <CarveCard
                 me={s.me} board={s.board} stone={cellOf(card.i)} selected={s.carveDir}
