@@ -147,6 +147,7 @@ export const useGame = () => {
     const walked = [...path.current];
     if (board.pits[i]) {
       sound.play('fall');
+      sound.hush(6000);
       pendingFall.current = api.fall(day.day, walked);
       pendingFall.current.catch(() => undefined);
       setS((p) => ({ ...p, player: cell, phase: 'falling', walkedThisRun: p.walkedThisRun + 1 }));
