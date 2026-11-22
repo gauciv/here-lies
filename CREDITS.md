@@ -1,0 +1,12 @@
+# Credits
+
+## Art
+
+- **16x16 DungeonTileset II** by 0x72 (Robert): floors, walls, door, pit, skull, stairs and the dwarf hero.
+  <https://0x72.itch.io/dungeontileset-ii> · License: [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) (public domain).
+  Frames are packed into `src/client/assets/dungeon.png` by `tools/build_atlas.py`.
+- Torch, flame, gravestone, digits and lighting are original to Here Lies.
+
+## Fonts
+
+- **Pixelify Sans** by Stefie Justprince, via Fontsource. License: [SIL Open Font License 1.1](https://openfontlicense.org).
