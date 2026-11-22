@@ -244,6 +244,7 @@ export class Scene {
         const variant = rand() < 0.6 ? 0 : 1 + Math.floor(rand() * 7);
         this.frameOf(x, FLOORS[variant] ?? 'floor_1', c * TILE, TOP + r * TILE);
       }
+    this.drawRock(x, s.board);
     // entrance stairs below the start stone
     this.frameOf(x, 'floor_stairs', 3 * TILE, TOP + ROWS * TILE);
     // pits stay hidden, even ones you fell into; they only appear when the dark lifts
@@ -257,6 +258,29 @@ export class Scene {
     s.graves.forEach((g, i) => this.drawGrave(x, i, g));
     // numbers last; on a slab they move to the corner so the arrow stays clear
     for (const i of s.revealed) this.drawClue(x, s.board, i % COLS, Math.floor(i / COLS), s.graves.has(i));
+  }
+
+  /** Today's solid rock: a brick face where it meets the floor below, dark stone on top, a lit lip on its upper edge. */
+  private drawRock(x: CanvasRenderingContext2D, board: Board): void {
+    const rock = (c: number, r: number) => r >= 0 && r < ROWS && c >= 0 && c < COLS && board.walls[idx(c, r)] === true;
+    const lip = FRAMES.wall_top_mid;
+    for (let r = 0; r < ROWS; r++)
+      for (let c = 0; c < COLS; c++) {
+        if (!rock(c, r)) continue;
+        const X = c * TILE, Y = TOP + r * TILE;
+        if (rock(c, r + 1)) {
+          // the rock's flat top: dark stone, speckled so it never reads as unlit floor or a pit
+          this.px(x, 'ink', X, Y, TILE, TILE);
+          for (let k = 0; k < 7; k++) {
+            const sx = Math.floor(hash2(c * 31 + k, r) * 15), sy = Math.floor(hash2(r * 17 + k, c) * 15);
+            this.px(x, 'pst1', X + sx, Y + sy, k % 3 === 0 ? 2 : 1, 1);
+          }
+        } else {
+          this.frameOf(x, 'wall_mid', X, Y);
+        }
+        // the stone lip along the top, unless the rock carries on upward (row 0 meets the wall)
+        if (r > 0 && !rock(c, r - 1) && this.atlas) x.drawImage(this.atlas, lip[0], lip[1] + 11, TILE, 5, X, Y, TILE, 5);
+      }
   }
 
   private drawWall(x: CanvasRenderingContext2D, board: Board, doorOpen: boolean): void {
@@ -521,7 +545,7 @@ export class Scene {
       const pulse = this.reduced ? 1 : 0.5 + 0.5 * Math.sin(t * 4);
       const col: ColorKey = pulse > 0.5 ? 'warm5' : 'warm3';
       for (const n of neighbors(s.player.c, s.player.r)) {
-        if (s.knownPits.has(idx(n.c, n.r))) continue;
+        if (s.knownPits.has(idx(n.c, n.r)) || s.board.walls[idx(n.c, n.r)]) continue;
         const X = n.c * TILE, Y = TOP + n.r * TILE, e = TILE - 2;
         this.px(ctx, col, X + 1, Y + 1, 2, 1); this.px(ctx, col, X + 1, Y + 1, 1, 2);
         this.px(ctx, col, X + e - 1, Y + 1, 2, 1); this.px(ctx, col, X + e, Y + 1, 1, 2);
