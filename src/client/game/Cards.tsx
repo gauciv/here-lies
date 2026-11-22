@@ -33,7 +33,7 @@ const EndActions = ({ me, onShare, onJoin, onFlair }: { me: MeDto; onFlair?: (()
       <div className="end-links">
         {onFlair && title && (
           <button className="link" disabled={busy || flaired} onClick={async () => { setBusy(true); setFlaired(await onFlair()); setBusy(false); }}>
-            {flaired ? `Wearing ${title}` : `Wear ${title} as flair`}
+            {flaired ? `${title} now shows by your name` : `Show ${title} next to your name`}
           </button>
         )}
         <button className="link" disabled={busy || joined} onClick={async () => { setBusy(true); setJoined(await onJoin()); setBusy(false); }}>
@@ -218,7 +218,7 @@ export const VictoryCard = ({ me, onShare, onContinue, onJoin, onFlair }: { me: 
       <div className="end-links">
         {st && (
           <button className="link" disabled={busy || flaired} onClick={async () => { setBusy(true); setFlaired(await onFlair()); setBusy(false); }}>
-            {flaired ? `Wearing ${st.title}` : `Wear ${st.title} as flair`}
+            {flaired ? `${st.title} now shows by your name` : `Show ${st.title} next to your name`}
           </button>
         )}
         <button className="link" disabled={busy || joined} onClick={async () => { setBusy(true); setJoined(await onJoin()); setBusy(false); }}>
