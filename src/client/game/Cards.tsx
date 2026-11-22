@@ -171,7 +171,7 @@ export const CarveCard = ({ me, board, stone, fellToward, selected, onSelect, on
     <section className="card card-carve card-dock" aria-label="Carve your arrow">
       <p className="carve-title">You died.</p>
       <p className="carve-what">
-        Your arrow is for those who come after. Point it at your pit to warn them, or anywhere else to fool them.
+        Point your arrow at your pit to warn those who follow, or anywhere else to fool them.
         {me.uncarvedQueued && ' This stone already bears an arrow; yours will wait beneath it until that one crumbles.'}
       </p>
       <div className="compass" role="group" aria-label="Choose an arrow">
