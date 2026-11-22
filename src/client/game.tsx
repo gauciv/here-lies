@@ -35,8 +35,9 @@ export const App = () => {
       board: s.board, revealed: s.revealed, player: s.player, graves, knownPits, phase: s.phase, revealAll,
       ghost: carving !== null,
       carvePreview: carving !== null ? { stone: carving, dir: s.carveDir } : null,
+      fading: s.fading,
     };
-  }, [s.board, s.revealed, s.player, s.graves, s.phase, s.me, s.card, s.carveDir]);
+  }, [s.board, s.revealed, s.player, s.graves, s.phase, s.me, s.card, s.carveDir, s.fading]);
 
   if (s.status === 'error') {
     return (
@@ -55,7 +56,7 @@ export const App = () => {
     <main className="app">
       {s.day && s.me ? <Hud day={s.day} me={s.me} onHelp={openHelp} /> : <header className="hud"><h1 className="logo">Here Lies</h1></header>}
       <Stage scene={scene} onTap={tap} onFallDone={onFallDone} onCrossDone={onCrossDone}>
-        {s.me && s.day && (
+        {s.me && s.day && !s.fading && (
           <div className={`card-layer ${s.player.r >= 4 && s.phase !== 'crossed' ? 'card-layer-top' : ''}`}>
             {card.kind === 'grave' && grave && s.board && (
               <GraveCard grave={grave} me={s.me} board={s.board} judged={s.phase === 'crossed' || s.phase === 'idle'} onClose={closeCard} />

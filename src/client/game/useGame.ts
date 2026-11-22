@@ -30,6 +30,8 @@ export type GameState = {
   walkedThisRun: number;
   /** the arrow being considered while carving (not yet confirmed) */
   carveDir: Direction | null;
+  /** fading to black between death and rebirth */
+  fading: boolean;
 };
 
 const startIdx = idx(START.c, START.r);
@@ -70,6 +72,7 @@ export const useGame = () => {
     toast: null,
     walkedThisRun: 0,
     carveDir: null,
+    fading: false,
   });
 
   const toast = useCallback((msg: string) => {
@@ -106,8 +109,8 @@ export const useGame = () => {
           graves: new Map(init.graves.map((g) => [g.i, g])),
           revealed: new Set([startIdx, ...me.revealed]),
           // mid-carve on reload: stand in the pit you fell into, so the true direction is known
-          // mid-carve on reload: the ghost stands on its slab
-          player: me.uncarved !== null ? cellOf(me.uncarved) : me.crossed ? { c: 3, r: 0 } : START,
+          // mid-carve on reload: the ghost lingers where it died
+          player: me.uncarved !== null && me.fellInto.length ? cellOf(me.fellInto[me.fellInto.length - 1]!) : me.crossed ? { c: 3, r: 0 } : START,
           phase,
           card,
         }));
@@ -201,6 +204,15 @@ export const useGame = () => {
     return { ...p, player: START, phase: 'walking', card: { kind: 'none' }, walkedThisRun: 0, carveDir: null };
   };
 
+  /** Fade to black, reset to the stairs while the screen is dark, then revive. */
+  const respawn = useCallback((update: (p: GameState) => GameState = (p) => p) => {
+    setS((p) => ({ ...update(p), fading: true }));
+    window.setTimeout(() => {
+      sound.play('revive');
+      setS((p) => ({ ...resetRun(p), fading: false }));
+    }, 480);
+  }, []);
+
   const onFallDone = useCallback(async () => {
     try {
       const res = await pendingFall.current;
@@ -212,8 +224,8 @@ export const useGame = () => {
           ? { kind: 'spent' }
           : { kind: 'fellAgain', reason: res.me.myArrow ? 'carvedToday' : 'stoneTaken' };
       const phase: Phase = res.me.uncarved === null && res.me.candles <= 0 ? 'idle' : 'fallen';
-      // when carving, the ghost floats back to the slab it fell from
-      setS((p) => ({ ...p, me: res.me, day: res.day, graves: putGrave(p.graves, res.grave), phase, card, carveDir: null, player: card.kind === 'carve' ? cellOf(res.grave.i) : p.player }));
+      // the ghost lingers over the pit where it died
+      setS((p) => ({ ...p, me: res.me, day: res.day, graves: putGrave(p.graves, res.grave), phase, card, carveDir: null }));
     } catch (e) {
       toast(e instanceof Error ? e.message : 'The dark swallowed that step.');
       setS((p) => resetRun(p));
@@ -238,14 +250,12 @@ export const useGame = () => {
     try {
       sound.play('carve');
       const res = await api.carve(day.day, card.i, arrow);
-      setS((p) => {
-        const next = { ...p, me: res.me, graves: putGrave(p.graves, res.grave) };
-        return res.me.candles > 0 ? resetRun(next) : { ...next, phase: 'idle', card: { kind: 'spent' } };
-      });
+      if (res.me.candles > 0) respawn((p) => ({ ...p, me: res.me, graves: putGrave(p.graves, res.grave) }));
+      else setS((p) => ({ ...p, me: res.me, graves: putGrave(p.graves, res.grave), phase: 'idle', card: { kind: 'spent' } }));
     } catch (e) {
       toast(e instanceof Error ? e.message : 'The chisel slipped. Try again.');
     }
-  }, [s, toast]);
+  }, [s, toast, respawn]);
 
   const selectArrow = useCallback((d: Direction) => {
     setS((p) => (p.card.kind === 'carve' ? { ...p, carveDir: d } : p));
@@ -257,11 +267,11 @@ export const useGame = () => {
     if (!api || !day || card.kind !== 'carve') return;
     try {
       const res = await api.skip(day.day, card.i);
-      setS((p) => resetRun({ ...p, me: res.me }));
+      respawn((p) => ({ ...p, me: res.me }));
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Could not skip.');
     }
-  }, [s, toast]);
+  }, [s, toast, respawn]);
 
   const share = useCallback(async (): Promise<boolean> => {
     const api = apiRef.current;
@@ -329,8 +339,8 @@ export const useGame = () => {
   }, []);
 
   const walkAgain = useCallback(() => {
-    setS((p) => (p.card.kind === 'fellAgain' ? resetRun(p) : p));
-  }, []);
+    if (s.card.kind === 'fellAgain') respawn();
+  }, [s.card.kind, respawn]);
 
   return { s, tap, onFallDone, onCrossDone, carve, selectArrow, skip, share, join, flair, walkAgain, startPlaying, openHelp, closeCard, hint };
 };

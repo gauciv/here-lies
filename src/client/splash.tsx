@@ -96,6 +96,7 @@ export const Splash = () => {
       knownPits: new Set<number>(),
       ghost: false,
       carvePreview: null,
+      fading: false,
       phase: 'walking',
       revealAll: false,
     };
