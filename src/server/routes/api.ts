@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { context, reddit } from '@devvit/web/server';
 import { Engine, GameError } from '../../shared/engine';
-import type { ErrorResponse, JoinResponse, ShareResponse } from '../../shared/api';
+import type { ErrorResponse, FlairResponse, JoinResponse, ShareResponse } from '../../shared/api';
 import { redisStore } from '../core/redisStore';
 import { postDay } from '../core/post';
 
@@ -103,6 +103,21 @@ api.post('/join', async (c) => {
   try {
     await reddit.subscribeToCurrentSubreddit();
     return c.json<JoinResponse>({ type: 'join' });
+  } catch (e) {
+    return fail(c, e);
+  }
+});
+
+api.post('/flair', async (c) => {
+  try {
+    const body = await readBody(c);
+    const day = dayFrom(body);
+    const user = await username();
+    const { subredditName } = context;
+    if (!subredditName) throw new GameError('Open the game from its post');
+    const flair = await engine.flairFor(day, user);
+    await reddit.setUserFlair({ subredditName, username: user, ...flair });
+    return c.json<FlairResponse>({ type: 'flair', text: flair.text });
   } catch (e) {
     return fail(c, e);
   }
