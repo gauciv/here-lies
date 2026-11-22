@@ -2,7 +2,7 @@
 // Art: 0x72 "16x16 DungeonTileset II" (CC0) plus a few hand-made sprites.
 // Each frame: draw the dungeon at full brightness → multiply by banded, dithered
 // torchlight (nothing else lights the dark) → draw emissive bits (flame, sparks).
-import { COLS, ROWS, clue, idx, mulberry32, neighbors, type Board, type Cell } from '../../shared/board';
+import { COLS, ROWS, START as START_CELL, clue, idx, mulberry32, neighbors, type Board, type Cell } from '../../shared/board';
 import atlasUrl from '../assets/dungeon.png';
 import { FRAMES, HERO_IDLE, HERO_RUN, type FrameName } from './atlas';
 import { C, type ColorKey } from './palette';
@@ -42,6 +42,8 @@ export type SceneState = {
   ghost: boolean;
   /** carving preview: the slab's stone and the arrow being considered */
   carvePreview: { stone: number; dir: number | null } | null;
+  /** fading to black before a respawn */
+  fading: boolean;
 };
 
 /** How far the torch reaches, in tiles (centre to centre). Drawing and tapping share it. */
@@ -59,6 +61,7 @@ export type SceneEvents = {
 
 type Mote = { x: number; y: number; vx: number; vy: number; life: number; seed: number };
 type Shatter = { x: number; y: number; t0: number };
+const REVIVE_MS = 1500;
 const SHATTER_MS = 1100;
 
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
@@ -112,7 +115,8 @@ export class Scene {
   private motes: Mote[] = [];
   private embers: Mote[] = [];
   private shatters: Shatter[] = [];
-  private ghostCanvas: HTMLCanvasElement | null = null;
+  private fade = 0;
+  private reviveT0 = -1;
   private raf = 0;
   private torchGlow = 1;
   private dawn = 0;
@@ -158,6 +162,11 @@ export class Scene {
         this.pos = { x: next.player.c, y: next.player.r };
         this.hopT0 = -1;
         this.facing = 1;
+        // back at the stairs after dying: revive
+        if (next.player.c === START_CELL.c && next.player.r === START_CELL.r && prev.phase !== 'walking' && !this.reduced) {
+          this.reviveT0 = now;
+          this.torchGlow = 0;
+        }
       }
     }
     if (next.phase !== this.lastPhase) {
@@ -219,7 +228,7 @@ export class Scene {
   // ── static layer: walls, floor, numbers, graves (rebuilt only on change) ───
   private ensureLayer(s: SceneState, doorOpen: boolean): void {
     if (!this.atlas) return;
-    let key = `${s.board.day}|${doorOpen ? 1 : 0}|${[...s.revealed].sort((a, b) => a - b).join(',')}|${[...s.knownPits].join(',')}|`;
+    let key = `${s.board.day}|${doorOpen ? 1 : 0}|${[...s.revealed].sort((a, b) => a - b).join(',')}|${s.ghost ? idx(s.player.c, s.player.r) : '-'}|`;
     key += s.revealAll ? 'R|' : '';
     s.graves.forEach((g, i) => { key += `${i}:${g.arrow}:${g.truth}:${g.wear}:${g.mine ? 1 : 0};`; });
     if (key === this.layerKey) return;
@@ -236,10 +245,14 @@ export class Scene {
       }
     // entrance stairs below the start stone
     this.frameOf(x, 'floor_stairs', 3 * TILE, TOP + ROWS * TILE);
-    // your own falls stay open; when the dark lifts, every real pit is shown
-    s.board.pits.forEach((isPit, p) => {
-      if (isPit && (s.revealAll || s.knownPits.has(p))) this.frameOf(x, 'hole', (p % COLS) * TILE, TOP + Math.floor(p / COLS) * TILE);
-    });
+    // pits stay hidden, even ones you fell into; they only appear when the dark lifts
+    // while you're a ghost, the pit you died in gapes beneath you
+    if (s.ghost && !s.revealAll) this.frameOf(x, 'hole', s.player.c * TILE, TOP + s.player.r * TILE);
+    if (s.revealAll) {
+      s.board.pits.forEach((isPit, p) => {
+        if (isPit) this.frameOf(x, 'hole', (p % COLS) * TILE, TOP + Math.floor(p / COLS) * TILE);
+      });
+    }
     s.graves.forEach((g, i) => this.drawGrave(x, i, g));
     // numbers last; on a slab they move to the corner so the arrow stays clear
     for (const i of s.revealed) this.drawClue(x, s.board, i % COLS, Math.floor(i / COLS), s.graves.has(i));
@@ -291,29 +304,22 @@ export class Scene {
     }
   }
 
-  /** The hero as a pale, floating ghost (drawn after lighting, so it glows). */
+  /** The dwarf's spirit hovering over the pit where it died (drawn after lighting, so it glows). */
   private drawGhost(ctx: CanvasRenderingContext2D, hx: number, hy: number, flip: boolean, t: number): void {
-    if (!this.atlas) return;
-    if (!this.ghostCanvas) {
-      this.ghostCanvas = document.createElement('canvas');
-      this.ghostCanvas.width = HERO_W;
-      this.ghostCanvas.height = HERO_H;
-    }
-    const g = this.ghostCanvas.getContext('2d');
-    if (!g) return;
-    g.clearRect(0, 0, HERO_W, HERO_H);
-    g.globalCompositeOperation = 'source-over';
-    this.frameOf(g, heroFrame(false, 0), 0, 0, flip);
-    g.globalCompositeOperation = 'source-atop';
-    g.fillStyle = C.ghost3;
-    g.globalAlpha = 0.75;
-    g.fillRect(0, 0, HERO_W, HERO_H);
-    g.globalAlpha = 1;
-    g.globalCompositeOperation = 'source-over';
-    const bob = this.reduced ? 0 : Math.round(Math.sin(t * 2.4) * 1.5) - 2;
+    const frames = getSprites().ghost;
+    const sprite = frames[this.reduced ? 0 : Math.floor(t * 2.5) % 2]!;
+    const bob = this.reduced ? 0 : Math.round(Math.sin(t * 2.2) * 1.5);
+    const gx = hx + Math.round((HERO_W - sprite.w) / 2);
+    const gy = hy + HERO_H - sprite.h - 3 + bob;
     ctx.save();
-    ctx.globalAlpha = 0.72;
-    ctx.drawImage(this.ghostCanvas, hx, hy + bob);
+    ctx.globalAlpha = 0.82;
+    if (flip) {
+      ctx.translate(gx + sprite.w, gy);
+      ctx.scale(-1, 1);
+      ctx.drawImage(sprite.canvas, 0, 0);
+    } else {
+      ctx.drawImage(sprite.canvas, gx, gy);
+    }
     ctx.restore();
   }
 
@@ -323,7 +329,6 @@ export class Scene {
     const X = sc * TILE, Y = TOP + sr * TILE;
     const sp = getSprites();
     ctx.save();
-    ctx.globalAlpha = 0.85;
     ctx.drawImage(sp.slab.canvas, X + 2, Y + 2);
     ctx.restore();
     if (dir === null) return;
@@ -332,17 +337,13 @@ export class Scene {
     ctx.drawImage(sp.arrow(dir, 'warm4').canvas, X + 4, Y + 4);
     const to = pointedCell({ c: sc, r: sr }, dir);
     if (to.c < 0 || to.r < 0 || to.c >= COLS || to.r >= ROWS) return;
-    // dotted line from slab to target
-    const ax = X + 8, ay = Y + 8, bx = to.c * TILE + 8, by = TOP + to.r * TILE + 8;
-    for (let k = 3; k <= 13; k += 2) {
-      const f = k / 16;
-      this.px(ctx, 'warm5', Math.round(ax + (bx - ax) * f), Math.round(ay + (by - ay) * f));
-    }
-    // the stone it points at, outlined in red: "the pit is here"
+    // the stone it points at gets red corner marks on the floor, under any character
     const TX = to.c * TILE, TY = TOP + to.r * TILE, e = TILE - 2;
     const col: ColorKey = pulse > 0.5 ? 'red2' : 'red1';
-    this.px(ctx, col, TX + 1, TY + 1, e, 1); this.px(ctx, col, TX + 1, TY + e, e, 1);
-    this.px(ctx, col, TX + 1, TY + 1, 1, e); this.px(ctx, col, TX + e, TY + 1, 1, e);
+    this.px(ctx, col, TX + 1, TY + 1, 3, 1); this.px(ctx, col, TX + 1, TY + 1, 1, 3);
+    this.px(ctx, col, TX + e - 2, TY + 1, 3, 1); this.px(ctx, col, TX + e, TY + 1, 1, 3);
+    this.px(ctx, col, TX + 1, TY + e, 3, 1); this.px(ctx, col, TX + 1, TY + e - 2, 1, 3);
+    this.px(ctx, col, TX + e - 2, TY + e, 3, 1); this.px(ctx, col, TX + e, TY + e - 2, 1, 3);
   }
 
   // ── per frame ────────────────────────────────────────────────────────────
@@ -386,7 +387,7 @@ export class Scene {
     ctx.drawImage(this.layer, 0, 0);
 
     // the floor opening under a falling hero
-    if (fallP > 0 && s.phase !== 'walking') {
+    if (s.phase === 'falling') {
       const fx = s.player.c * TILE + 8, fy = TOP + s.player.r * TILE + 9;
       const rr = 2 + Math.min(1, fallP / 0.5) * 6;
       ctx.fillStyle = C.ink;
@@ -439,6 +440,8 @@ export class Scene {
         ctx.rect(0, 12, SCENE_W, SCENE_H);
         ctx.clip();
       }
+      const reviveP = this.reviveT0 >= 0 ? (now - this.reviveT0) / REVIVE_MS : 1;
+      if (reviveP < 0.45) ctx.globalAlpha = Math.max(0, (reviveP - 0.1) / 0.35);
       this.frameOf(ctx, heroFrame(running, frameNo), hx, hy, flip);
       ctx.restore();
     }
@@ -495,20 +498,23 @@ export class Scene {
     // ── emissive layer ──
     const blink = (seed: number, rate: number) => hash2(Math.floor(t * rate), Math.floor(seed * 1000));
 
-    // daylight leaking under the far door: the goal, visible from anywhere
+    // daylight leaking around the far door's edges: the goal, visible from anywhere
     if (crossP < 0.08) {
-      for (let k = 0; k < 24; k++) {
-        const on = this.reduced || blink(40 + k, 3) > 0.25;
-        if (!on) continue;
-        const col: ColorKey = k > 6 && k < 17 ? (blink(80 + k, 5) > 0.5 ? 'warm6' : 'warm5') : 'warm3';
-        this.px(ctx, col, DOOR_X + 4 + k, 31);
-      }
-      if (!this.reduced && blink(99, 2) > 0.6) this.px(ctx, 'warm4', DOOR_X + 15, 30, 2, 1);
+      const edge: [number, number][] = [];
+      for (let y = 2; y < 32; y++) { edge.push([DOOR_X, y]); edge.push([DOOR_X + 31, y]); }
+      for (let x = DOOR_X + 2; x < DOOR_X + 30; x++) edge.push([x, 0]);
+      edge.push([DOOR_X + 1, 1], [DOOR_X + 30, 1]);
+      for (let x = DOOR_X + 1; x < DOOR_X + 31; x++) edge.push([x, 31]);
+      edge.forEach(([x, y], k) => {
+        if (!this.reduced && blink(40 + k, 3) < 0.18) return;
+        const bright = y >= 28 || blink(200 + k, 4) > 0.75;
+        this.px(ctx, bright ? 'warm6' : y > 16 ? 'warm5' : 'warm4', x, y);
+      });
     }
 
     // carving: your ghost on the slab, and a preview of the arrow being considered
-    if (s.ghost) this.drawGhost(ctx, hx, hy, flip, t);
     if (s.carvePreview) this.drawCarvePreview(ctx, s.carvePreview.stone, s.carvePreview.dir, t);
+    if (s.ghost) this.drawGhost(ctx, hx, hy, flip, t);
 
     // step markers: corner brackets on stones you can step to
     if (s.phase === 'walking' && this.hopT0 < 0) {
@@ -571,6 +577,36 @@ export class Scene {
       }
     }
 
+    // revival at the stairs: a shaft of light, rising sparks, a ring at the feet
+    if (this.reviveT0 >= 0) {
+      const p = (now - this.reviveT0) / REVIVE_MS;
+      if (p >= 1) this.reviveT0 = -1;
+      else {
+        const cx = hx + 8, foot = hy + HERO_H - 2;
+        const beam = p < 0.5 ? 1 : 1 - (p - 0.5) / 0.5;
+        for (let y = 0; y < foot; y++) {
+          const w = y > foot - 30 ? 3 : 2;
+          for (let k = -w; k <= w; k++) {
+            if (hash2(y * 7 + k, Math.floor(t * 20)) > beam * (1 - Math.abs(k) / (w + 1)) * 0.9) continue;
+            this.px(ctx, Math.abs(k) <= 1 ? 'warm6' : 'warm5', cx + k, y);
+          }
+        }
+        if (p < 0.4) { // a ring of light spreading at the feet
+          const rr = 2 + p * 22;
+          for (let a = 0; a < 16; a++) {
+            const ang = (a / 16) * Math.PI * 2;
+            this.px(ctx, 'warm5', Math.round(cx + Math.cos(ang) * rr), Math.round(foot + Math.sin(ang) * rr * 0.35));
+          }
+        }
+        for (let k = 0; k < 14; k++) { // sparks drifting up
+          const sp = (p * 1.4 + hash2(k, 5)) % 1;
+          const sx = cx + Math.round((hash2(k, 9) - 0.5) * 18 + Math.sin(t * 3 + k) * 2);
+          const sy = Math.round(foot - sp * 34);
+          if (p < 0.85) this.px(ctx, sp < 0.5 ? 'warm6' : 'warm4', sx, sy);
+        }
+      }
+    }
+
     // debris falling into the pit
     if (s.phase === 'falling' && fallP < 0.8) {
       const fx = s.player.c * TILE + 8, fy = TOP + s.player.r * TILE + 9;
@@ -581,5 +617,15 @@ export class Scene {
       }
     }
     ctx.restore();
+
+    // fade to black between death and rebirth
+    this.fade += ((s.fading ? 1 : 0) - this.fade) * (s.fading ? 0.16 : 0.07);
+    if (this.fade > 0.01) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, this.fade);
+      ctx.fillStyle = C.void0;
+      ctx.fillRect(0, 0, SCENE_W, SCENE_H);
+      ctx.restore();
+    }
   }
 }

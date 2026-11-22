@@ -59,6 +59,39 @@ export const arrowRows = (dir: number): string[] => {
   return rows;
 };
 
+// ── ghost: the dwarf's spirit (spiky hair, big beard, wisps for legs) ───────
+const GHOST_A = [
+  '......oo........',
+  '.....oHHo.......',
+  '....oHHBBo......',
+  '...oHBBBBBoo....',
+  '..oHBBBBBBBBo...',
+  '..oBBBBBBBBBBo..',
+  '..oBeeBBBeeBBo..',
+  '..oBeeBBBeeBBo..',
+  '..oBBBBBBBBBBo..',
+  '..oBWWWWWWWWBo..',
+  '.oSWWWWWWWWWWSo.',
+  '.oSWWWWWWWWWWSo.',
+  '.oSBWWWWWWWWBSo.',
+  '..oSBWWWWWWBSo..',
+  '..oSBBWWWWBBSo..',
+  '..oSBBBWWBBBSo..',
+  '...oSBBBBBBSo...',
+  '...oSBBSSBBSo...',
+  '....oSBo.oSBo...',
+  '....oSo...oSo...',
+  '.....o.....o....',
+] as const;
+const GHOST_B = [
+  ...GHOST_A.slice(0, 17),
+  '...oSBBSSBBSo...',
+  '...oSBo..oSBo...',
+  '...oSo....oSo...',
+  '....o......o....',
+] as const;
+const GHOST_LEGEND: Legend = { o: 'ghost1', H: 'bone3', B: 'ghost3', W: 'bone2', S: 'ghost2', e: 'void1' };
+
 // ── 3x5 digits ──────────────────────────────────────────────────────────────
 const DIGITS: Record<number, readonly string[]> = {
   1: ['.#.', '##.', '.#.', '.#.', '###'],
@@ -72,6 +105,7 @@ const DIGITS: Record<number, readonly string[]> = {
 };
 
 export type Sprites = {
+  ghost: readonly [Sprite, Sprite];
   slab: Sprite;
   slabMine: Sprite;
   arrow: (dir: number, color: ColorKey) => Sprite;
@@ -89,6 +123,7 @@ export const getSprites = (): Sprites => {
     return s;
   };
   sprites = {
+    ghost: [build(GHOST_A, GHOST_LEGEND), build(GHOST_B, GHOST_LEGEND)],
     slab: build(SLAB_ROWS, SLAB_LEGEND),
     slabMine: build(SLAB_ROWS, SLAB_MINE_LEGEND),
     arrow: (dir, color) => cached(`a${dir}:${color}`, () => build(arrowRows(dir), { '#': color })),
