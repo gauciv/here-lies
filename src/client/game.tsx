@@ -1,16 +1,36 @@
 import './index.css';
 
-import { StrictMode, useMemo } from 'react';
+import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CarveCard, CrossedCard, FellAgainCard, GraveCard, IntroCard, SpentCard } from './game/Cards';
-import { Hud } from './game/Hud';
+import { Hud, MuteButton } from './game/Hud';
+import { Standby, type StandbyHandle } from './game/Standby';
+import { sound } from './engine/sound';
 import { Stage } from './game/Stage';
 import { cellOf } from '../shared/board';
 import { arrowIsTrue, directionBetween } from '../shared/epitaphs';
 import { useGame } from './game/useGame';
 import type { GraveView, SceneState } from './engine/scene';
 
+const AUTO_ENTER_KEY = 'herelies:enter';
+
+/** The feed post's "Enter the dungeon" leaves a short-lived note so the game walks straight in. */
+const consumeAutoEnter = (): boolean => {
+  try {
+    const at = Number(window.localStorage.getItem(AUTO_ENTER_KEY) ?? 0);
+    window.localStorage.removeItem(AUTO_ENTER_KEY);
+    return Date.now() - at < 30_000;
+  } catch {
+    return false;
+  }
+};
+
 export const App = () => {
+  const [view, setView] = useState<'camp' | 'board'>('camp');
+  const [fade, setFade] = useState(false);
+  const [entering, setEntering] = useState(false);
+  const standby = useRef<StandbyHandle>(null);
+  const autoEnter = useRef(consumeAutoEnter());
   const { s, tap, onFallDone, onCrossDone, carve, selectArrow, skip, share, join, flair, walkAgain, openResult, startPlaying, openHelp, closeCard, hint } = useGame();
 
   const scene = useMemo<SceneState | null>(() => {
@@ -39,6 +59,32 @@ export const App = () => {
     };
   }, [s.board, s.revealed, s.player, s.graves, s.phase, s.me, s.card, s.carveDir, s.fading]);
 
+  /** Fade to black, swap what's on screen, fade back in. */
+  const crossFade = useCallback((to: 'camp' | 'board') => {
+    setFade(true);
+    window.setTimeout(() => {
+      setView(to);
+      sound.setMode(to === 'board' ? 'dungeon' : 'camp');
+      window.setTimeout(() => { setFade(false); setEntering(false); }, 120);
+    }, 420);
+  }, []);
+
+  const enter = useCallback(() => {
+    if (entering) return;
+    setEntering(true);
+    sound.play('door');
+    if (standby.current) standby.current.enter(() => crossFade('board'));
+    else crossFade('board');
+  }, [entering, crossFade]);
+
+  useEffect(() => {
+    if (s.status === 'ready' && autoEnter.current) {
+      autoEnter.current = false;
+      const finished = s.me && (s.me.crossed || s.me.candles <= 0) && s.me.uncarved === null;
+      if (!finished) window.setTimeout(enter, 500);
+    }
+  }, [s.status, s.me, enter]);
+
   if (s.status === 'error') {
     return (
       <main className="app app-center">
@@ -52,9 +98,19 @@ export const App = () => {
   const grave = card.kind === 'grave' ? s.graves.get(card.i) : undefined;
   const carveStep = card.kind === 'carve' && s.walkedThisRun > 0 ? s.walkedThisRun : null;
 
+  if (view === 'camp') {
+    return (
+      <main className="app" onPointerDown={() => sound.setMode('camp')}>
+        <div className="camp-corner"><MuteButton /></div>
+        <Standby ref={standby} day={s.day} me={s.me} busy={entering || s.status !== 'ready'} onEnter={enter} onReview={() => crossFade('board')} />
+        <div className={`screen-fade${fade ? ' on' : ''}`} />
+      </main>
+    );
+  }
+
   return (
     <main className="app">
-      {s.day && s.me ? <Hud day={s.day} me={s.me} onHelp={openHelp} /> : <header className="hud"><h1 className="logo">Here Lies</h1></header>}
+      {s.me ? <Hud me={s.me} onHelp={openHelp} /> : <header className="hud"><h1 className="logo">Here Lies</h1></header>}
       <Stage scene={scene} onTap={tap} onFallDone={onFallDone} onCrossDone={onCrossDone}>
         {s.me && s.day && !s.fading && (
           <div className={`card-layer ${s.player.r >= 4 && s.phase !== 'crossed' ? 'card-layer-top' : ''}`}>
@@ -79,9 +135,13 @@ export const App = () => {
       <footer className="hint" aria-live="polite">
         <span>{s.status === 'loading' ? 'Lighting the torch…' : hint}</span>
         {(s.phase === 'crossed' || s.phase === 'idle') && s.card.kind === 'none' && s.me && (
-          <button className="btn btn-share btn-result" onClick={openResult}>Your result</button>
+          <div className="vote-row">
+            <button className="btn btn-share btn-result" onClick={openResult}>Your result</button>
+            <button className="btn btn-result" onClick={() => crossFade('camp')}>Back to camp</button>
+          </div>
         )}
       </footer>
+      <div className={`screen-fade${fade ? ' on' : ''}`} />
     </main>
   );
 };
