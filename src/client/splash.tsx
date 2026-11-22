@@ -2,12 +2,13 @@ import './index.css';
 
 import { StrictMode, useEffect, useState, type MouseEvent } from 'react';
 import { createRoot } from 'react-dom/client';
-import { requestExpandedMode } from '@devvit/web/client';
+import { context, requestExpandedMode } from '@devvit/web/client';
+import { isResultPost, type ResultPost } from '../shared/share';
+import { ResultPostCard } from './game/ResultPost';
 import type { InitResponse } from '../shared/api';
-import { loadApi } from './api';
+import { isLocalPreview, loadApi } from './api';
 import { Standby } from './game/Standby';
 
-const isLocalPreview = () => ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
 /** Open the full game. "Enter" leaves a short note so it walks straight through the door. */
 const open = (e: MouseEvent, walkIn: boolean) => {
@@ -27,8 +28,30 @@ const open = (e: MouseEvent, walkIn: boolean) => {
   }
 };
 
-/** The feed post: the standby room, with your guide to the day's room on a scroll. */
+/** A shared result post carries its card in postData; a daily post doesn't. */
+const resultCard = (): ResultPost | null => {
+  if (isLocalPreview() && window.location.search.includes('demo-result')) return DEMO_RESULT;
+  try {
+    return isResultPost(context.postData) ? context.postData : null;
+  } catch {
+    return null; // local preview has no Reddit context
+  }
+};
+
+/** localhost only (splash.html?demo-result): what a shared result post looks like */
+const DEMO_RESULT: ResultPost = {
+  kind: 'result', day: 2, user: 'tallowwick', room: 'The Gilded Narrows', tier: 'Tricky',
+  crossed: true, time: 134_000, percent: 18, title: 'Pioneer', total: 11, streak: 4,
+};
+
+/** The feed post: the standby room, or the game card of a shared result. */
 export const Splash = () => {
+  const card = resultCard();
+  return card ? <ResultPostCard card={card} onPlay={(e) => open(e, false)} /> : <Camp />;
+};
+
+/** The daily post: the standby room, with your guide to the day's room on a scroll. */
+const Camp = () => {
   const [init, setInit] = useState<InitResponse | null>(null);
 
   useEffect(() => {

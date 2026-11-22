@@ -10,7 +10,8 @@ import { MAP_H, MAP_W, RoomMap } from './RoomMap';
 export type StandbyHandle = { enter: (onDone: () => void, onCue?: (cue: CampCue) => void) => void };
 
 /** The resting room, scaled to whole pixels so the art stays crisp. */
-type Revival = { onDone: () => void; onCue: (cue: CampCue) => void };
+/** an arrival scene: the soul's homecoming after a game over, or the walk home after a crossing */
+type Revival = { kind: 'soul' | 'return'; onDone: () => void; onCue: (cue: CampCue) => void };
 
 const CampCanvas = forwardRef<StandbyHandle, { maxScale?: number; revival?: Revival | undefined }>(({ maxScale = 4, revival }, ref) => {
   const wrap = useRef<HTMLDivElement>(null);
@@ -24,7 +25,7 @@ const CampCanvas = forwardRef<StandbyHandle, { maxScale?: number; revival?: Revi
     if (!canvas.current) return;
     const s = new CampScene(canvas.current);
     scene.current = s;
-    if (revivalRef.current) s.revive(revivalRef.current.onDone, revivalRef.current.onCue);
+    if (revivalRef.current) s.revive(revivalRef.current.onDone, revivalRef.current.onCue, revivalRef.current.kind);
     s.start();
     return () => s.stop();
   }, []);
@@ -143,6 +144,7 @@ export const Standby = forwardRef<StandbyHandle, {
   const [open, setOpen] = useState(false);
   const [bare, setBare] = useState(!!revival);
   const [revivalOnce] = useState<Revival | undefined>(() => revival && {
+    kind: revival.kind,
     onCue: revival.onCue,
     onDone: () => { setBare(false); revival.onDone(); },
   });

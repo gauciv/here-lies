@@ -8,20 +8,21 @@ type Props = {
   onFallDone: () => void;
   onCrossDone: () => void;
   onSoulGone?: () => void;
+  onExitDone?: () => void;
   /** keep this row in view beside the docked card (your ghost while you carve or mourn) */
   focusRow?: number | null;
   children?: ReactNode;
 };
 
 /** Integer-scaled pixel canvas that fills the space it is given. */
-export const Stage = ({ scene, onTap, onFallDone, onCrossDone, onSoulGone, focusRow = null, children }: Props) => {
+export const Stage = ({ scene, onTap, onFallDone, onCrossDone, onSoulGone, onExitDone, focusRow = null, children }: Props) => {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const engine = useRef<Scene | null>(null);
-  const handlers = useRef({ onFallDone, onCrossDone, onSoulGone });
+  const handlers = useRef({ onFallDone, onCrossDone, onSoulGone, onExitDone });
   useEffect(() => {
-    handlers.current = { onFallDone, onCrossDone, onSoulGone };
-  }, [onFallDone, onCrossDone, onSoulGone]);
+    handlers.current = { onFallDone, onCrossDone, onSoulGone, onExitDone };
+  }, [onFallDone, onCrossDone, onSoulGone, onExitDone]);
   const [scale, setScale] = useState(3);
   const [pan, setPan] = useState(0);
   const frame = useRef<HTMLDivElement>(null);
@@ -32,6 +33,7 @@ export const Stage = ({ scene, onTap, onFallDone, onCrossDone, onSoulGone, focus
       onFallDone: () => handlers.current.onFallDone(),
       onCrossDone: () => handlers.current.onCrossDone(),
       onSoulGone: () => handlers.current.onSoulGone?.(),
+      onExitDone: () => handlers.current.onExitDone?.(),
     });
     engine.current = sc;
     sc.start();

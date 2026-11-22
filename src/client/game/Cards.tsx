@@ -6,11 +6,10 @@ import { arrowRows } from '../engine/sprites';
 import type { ColorKey } from '../engine/palette';
 import { PixelIcon } from './PixelIcon';
 import type { DayDto, GraveDto, MeDto, MyArrowDto } from '../../shared/api';
-import { shareText } from '../../shared/share';
-import { pioneerTitle } from '../../shared/pioneer';
+import { formatTime } from '../../shared/pioneer';
 import { subredditName } from './reddit';
 import { TileIcon } from './TileIcon';
-import { CANDLE_LEGEND, CANDLE_LIT } from './icons';
+import { CANDLE_LEGEND, CANDLE_LIT, FLAME, FLAME_LEGEND } from './icons';
 
 type Social = { onShare: () => Promise<boolean>; onJoin: () => Promise<boolean> };
 
@@ -18,49 +17,29 @@ type Social = { onShare: () => Promise<boolean>; onJoin: () => Promise<boolean> 
  * End-of-run actions. Sharing is two explicit steps (preview, then post);
  * flair and joining sit behind "More". Nothing here is ever required.
  */
-const EndActions = ({ me, day, onShare, onJoin, onFlair }: { me: MeDto; day: DayDto; onFlair?: (() => Promise<boolean>) | undefined } & Social) => {
-  const [stage, setStage] = useState<'idle' | 'preview' | 'posting'>('idle');
-  const [more, setMore] = useState(false);
+const EndActions = ({ me, onShare, onJoin, onFlair }: { me: MeDto; onFlair?: (() => Promise<boolean>) | undefined } & Social) => {
   const [joined, setJoined] = useState(false);
   const [flaired, setFlaired] = useState(false);
   const [busy, setBusy] = useState(false);
   const sub = subredditName();
-  const title = me.pioneer !== null ? pioneerTitle(me.pioneer) : null;
+  const title = me.standing?.title ?? null;
   return (
     <div className="share">
-      {me.shared ? (
-        <p className="share-done">Your result is in the comments.</p>
-      ) : stage === 'idle' ? null : (
-        <blockquote className="share-preview">{shareText(day.day, me).replace(/\*\*/g, '')}</blockquote>
-      )}
       <div className="vote-row">
-        {!me.shared && stage === 'idle' && (
-          <button className="btn btn-share" onClick={() => setStage('preview')}>Share result</button>
-        )}
-        {!me.shared && stage !== 'idle' && (
-          <>
-            <button className="btn btn-share" disabled={stage === 'posting'} onClick={async () => { setStage('posting'); if (!(await onShare())) setStage('preview'); }}>
-              {stage === 'posting' ? 'Posting…' : 'Post comment'}
-            </button>
-            <button className="btn" disabled={stage === 'posting'} onClick={() => setStage('idle')}>Cancel</button>
-          </>
-        )}
-        {stage === 'idle' && (
-          <button className="btn btn-more" aria-expanded={more} onClick={() => setMore(!more)}>{more ? 'Less' : 'More'}</button>
-        )}
+        <button className="btn btn-share" disabled={busy || me.shared} onClick={async () => { setBusy(true); await onShare(); setBusy(false); }}>
+          {me.shared ? 'Shared' : 'Share result'}
+        </button>
       </div>
-      {more && stage === 'idle' && (
-        <div className="vote-row">
-          {onFlair && title && (
-            <button className="btn" disabled={busy || flaired} onClick={async () => { setBusy(true); setFlaired(await onFlair()); setBusy(false); }}>
-              {flaired ? `Wearing “${title}”` : `Wear “${title}” as flair`}
-            </button>
-          )}
-          <button className="btn" disabled={busy || joined} onClick={async () => { setBusy(true); setJoined(await onJoin()); setBusy(false); }}>
-            {joined ? 'Joined' : sub ? `Join r/${sub}` : 'Join the community'}
+      <div className="end-links">
+        {onFlair && title && (
+          <button className="link" disabled={busy || flaired} onClick={async () => { setBusy(true); setFlaired(await onFlair()); setBusy(false); }}>
+            {flaired ? `Wearing ${title}` : `Wear ${title} as flair`}
           </button>
-        </div>
-      )}
+        )}
+        <button className="link" disabled={busy || joined} onClick={async () => { setBusy(true); setJoined(await onJoin()); setBusy(false); }}>
+          {joined ? 'Joined' : sub ? `Join r/${sub}` : 'Join the community'}
+        </button>
+      </div>
     </div>
   );
 };
@@ -87,11 +66,6 @@ const ArrowRecord = ({ mine }: { mine: MyArrowDto }) => (
   </div>
 );
 
-const ordinal = (n: number): string => {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
-};
 
 const useCountdown = (day: number): string => {
   const target = dayStartUtc(day + 1);
@@ -212,22 +186,45 @@ export const CarveCard = ({ me, board, stone, fellToward, selected, onSelect, on
   );
 };
 
-export const CrossedCard = ({ me, day, onClose, onShare, onJoin, onFlair }: { me: MeDto; day: DayDto; onClose: () => void; onFlair: () => Promise<boolean> } & Social) => {
-  const countdown = useCountdown(day.day);
-  const title = me.pioneer !== null ? pioneerTitle(me.pioneer) : null;
+/**
+ * The crossing: no panel, just the result over the dark while your dwarf
+ * cheers in the torchlight. Share it, or carry on to the camp.
+ */
+export const VictoryCard = ({ me, onShare, onContinue, onJoin, onFlair }: { me: MeDto; onContinue: () => void; onFlair: () => Promise<boolean> } & Social) => {
+  const [busy, setBusy] = useState(false);
+  const [flaired, setFlaired] = useState(false);
+  const [joined, setJoined] = useState(false);
+  const sub = subredditName();
+  const st = me.standing;
   return (
-    <section className="card card-win" aria-label="You crossed">
-      <button className="card-close" onClick={onClose} aria-label="Close">×</button>
-      <p className="card-kicker">The far wall{me.rank ? ` · ${ordinal(me.rank)} across today` : ''}</p>
-      <p className="epitaph">You crossed.</p>
-      {title && <p className="pioneer-title">{title}</p>}
-      <dl className="stats">
-        <div><dt>Pioneer</dt><dd>{me.pioneer !== null ? `${me.pioneer}%` : '—'}</dd></div>
-        <div><dt>Streak</dt><dd>{me.streak}</dd></div>
-      </dl>
-      {me.myArrow && <ArrowRecord mine={me.myArrow} />}
-      <EndActions me={me} day={day} onShare={onShare} onJoin={onJoin} onFlair={onFlair} />
-      <p className="card-foot">Pioneer: share of pits nobody had found when you crossed. New crossing in {countdown}.</p>
+    <section className="victory" aria-label="You crossed">
+      <p className="victory-title">You crossed.</p>
+      {me.time !== null && <p className="victory-time" aria-label={`Time ${formatTime(me.time)}`}>{formatTime(me.time)}</p>}
+      {st && (
+        <p className="victory-standing">
+          <b className={`standing-${st.title.toLowerCase()}`}>{st.title}</b>
+          {st.total === 1 ? ' · first across today' : st.percent <= 50 ? ` · top ${st.percent}% of today's ${st.total} crossers` : ` · #${st.position} of ${st.total} crossers today`}
+        </p>
+      )}
+      <p className="victory-streak">
+        <PixelIcon rows={FLAME} legend={FLAME_LEGEND} size={2} /> {me.streak} day streak
+      </p>
+      <div className="vote-row victory-actions">
+        <button className="btn btn-share" disabled={busy || me.shared} onClick={async () => { setBusy(true); await onShare(); setBusy(false); }}>
+          {me.shared ? 'Shared' : 'Share result'}
+        </button>
+        <button className="btn" disabled={busy} onClick={onContinue}>Continue</button>
+      </div>
+      <div className="end-links">
+        {st && (
+          <button className="link" disabled={busy || flaired} onClick={async () => { setBusy(true); setFlaired(await onFlair()); setBusy(false); }}>
+            {flaired ? `Wearing ${st.title}` : `Wear ${st.title} as flair`}
+          </button>
+        )}
+        <button className="link" disabled={busy || joined} onClick={async () => { setBusy(true); setJoined(await onJoin()); setBusy(false); }}>
+          {joined ? 'Joined' : sub ? `Join r/${sub}` : 'Join the community'}
+        </button>
+      </div>
     </section>
   );
 };
@@ -241,7 +238,7 @@ export const SpentCard = ({ me, day, onClose, onShare, onJoin }: { me: MeDto; da
       <p className="epitaph">Rest now.</p>
       <p className="card-meta">The dark has lifted: every pit is shown, and every arrow is revealed as truth or lie.</p>
       {me.myArrow && <ArrowRecord mine={me.myArrow} />}
-      <EndActions me={me} day={day} onShare={onShare} onJoin={onJoin} />
+      <EndActions me={me} onShare={onShare} onJoin={onJoin} />
       <p className="card-foot">{day.crossed} crossed · {day.fallen} fell · new crossing in {countdown}</p>
     </section>
   );

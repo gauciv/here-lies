@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { START, cellOf, generateBoard, idx, isStep, type Board, type Cell } from '../../shared/board';
 import { CRUMBLE_AFTER, directionBetween, validDirections, type Direction } from '../../shared/epitaphs';
 import type { CrossResponse, DayDto, FallResponse, GraveDto, MeDto } from '../../shared/api';
-import { loadApi, type GameApi } from '../api';
+import { isLocalPreview, loadApi, type GameApi } from '../api';
 import { isLit, type Phase } from '../engine/scene';
 import { sound } from '../engine/sound';
-import { navigateTo } from '@devvit/web/client';
+import { navigateTo, showForm } from '@devvit/web/client';
+import { defaultCaption } from '../../shared/share';
 import { subredditName } from './reddit';
 
 export type Card =
@@ -103,7 +104,8 @@ export const useGame = () => {
         const board = generateBoard(init.day.day);
         const me = init.me;
         const phase: Phase = me.crossed ? 'crossed' : me.uncarved !== null ? 'fallen' : me.candles <= 0 ? 'idle' : 'walking';
-        const card: Card = me.crossed ? { kind: 'crossed' } : me.uncarved !== null ? { kind: 'carve', i: me.uncarved } : me.candles <= 0 ? { kind: 'spent' } : introSeen() ? { kind: 'none' } : { kind: 'intro' };
+        // a finished day opens on the revealed room; 'Your result' brings the result back
+        const card: Card = me.crossed || me.candles <= 0 ? { kind: 'none' } : me.uncarved !== null ? { kind: 'carve', i: me.uncarved } : introSeen() ? { kind: 'none' } : { kind: 'intro' };
         setS((p) => ({
           ...p,
           status: 'ready',
@@ -112,9 +114,8 @@ export const useGame = () => {
           me,
           graves: new Map(init.graves.map((g) => [g.i, g])),
           revealed: new Set([startIdx, ...me.revealed]),
-          // mid-carve on reload: stand in the pit you fell into, so the true direction is known
-          // mid-carve on reload: the ghost lingers where it died
-          player: me.uncarved !== null && me.fellInto.length ? cellOf(me.fellInto[me.fellInto.length - 1]!) : me.crossed ? { c: 3, r: 0 } : START,
+          // mid-carve on reload the ghost lingers where it died; after crossing you stand at the door
+          player: me.uncarved !== null && me.fellInto.length ? cellOf(me.fellInto[me.fellInto.length - 1]!) : me.crossed ? board.door : START,
           phase,
           card,
         }));
@@ -132,7 +133,7 @@ export const useGame = () => {
   const tap = useCallback((cell: Cell) => {
     const { board, phase, card, player, graves, day } = s;
     if (!board || !day) return;
-    if (card.kind === 'gameOver') return; // the soul is on its way home; the board waits
+    if (card.kind === 'gameOver' || card.kind === 'crossed') return; // a cutscene owns the board until you choose
     // carving: tapping a stone next to your slab aims the arrow at it
     if (card.kind === 'carve') {
       const d = directionBetween(cellOf(card.i), cell);
@@ -269,19 +270,52 @@ export const useGame = () => {
     }
   }, [s, toast, respawn]);
 
+  /** Share as a Reddit post: the player edits a caption, the post carries their result card. */
   const share = useCallback(async (): Promise<boolean> => {
     const api = apiRef.current;
-    const day = s.day;
-    if (!api || !day) return false;
+    const { day, me } = s;
+    if (!api || !day || !me) return false;
+    const suggested = defaultCaption(day.day, me);
+    let caption = suggested;
+    if (!isLocalPreview()) {
+      try {
+        const res = await showForm({
+          title: 'Share your result',
+          description: 'Your caption becomes the post title. Your result card is shown below it.',
+          fields: [{ type: 'paragraph', name: 'caption', label: 'Caption', defaultValue: suggested }],
+          acceptLabel: 'Post',
+          cancelLabel: 'Cancel',
+        });
+        if (res.action !== 'SUBMITTED') return false;
+        caption = typeof res.values.caption === 'string' && res.values.caption.trim() ? res.values.caption : suggested;
+      } catch {
+        return false;
+      }
+    }
     try {
-      const res = await api.share(day.day);
+      const res = await api.share(day.day, caption);
       setS((p) => ({ ...p, me: res.me }));
+      if (res.url) navigateTo(res.url);
+      else toast('Your result post is up.');
       return true;
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not post your comment.');
+      toast(e instanceof Error ? e.message : 'Could not post your result.');
       return false;
     }
-  }, [s.day, toast]);
+  }, [s, toast]);
+
+  /** Stepping into the dungeon starts today's clock (once; it never resets). */
+  const startRun = useCallback(async () => {
+    const api = apiRef.current;
+    const { day, me } = s;
+    if (!api || !day || !me || me.startedAt !== null || me.crossed || me.candles <= 0) return;
+    try {
+      const res = await api.start(day.day);
+      setS((p) => ({ ...p, me: res.me }));
+    } catch {
+      /* the server starts the clock at the latest when you cross */
+    }
+  }, [s]);
 
   const join = useCallback(async (): Promise<boolean> => {
     const api = apiRef.current;
@@ -319,7 +353,7 @@ export const useGame = () => {
 
   const hint = useMemo(() => {
     if (s.status !== 'ready') return '';
-    if (s.card.kind === 'gameOver' || s.card.kind === 'fellAgain') return ''; // the death screen speaks for itself
+    if (s.card.kind === 'gameOver' || s.card.kind === 'fellAgain' || s.card.kind === 'crossed') return ''; // the scene speaks for itself
     if (s.phase === 'falling') return 'The stone gives way…';
     if (s.phase === 'crossing') return 'The gate opens.';
     if (s.phase === 'crossed' || s.phase === 'idle') return s.graves.size ? 'The dark has lifted. Tap a slab to see if its arrow lied.' : '';
@@ -354,5 +388,5 @@ export const useGame = () => {
     setS((p) => (p.card.kind === 'gameOver' ? { ...p, card: { kind: 'none' } } : p));
   }, []);
 
-  return { s, tap, onFallDone, onCrossDone, carve, selectArrow, skip, share, join, flair, walkAgain, leaveRun, openResult, startPlaying, openHelp, closeCard, hint };
+  return { s, tap, onFallDone, onCrossDone, carve, selectArrow, skip, share, startRun, join, flair, walkAgain, leaveRun, openResult, startPlaying, openHelp, closeCard, hint };
 };

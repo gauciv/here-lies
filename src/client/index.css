@@ -75,7 +75,8 @@ body {
 /* the day's tier on one line: a bold pixel stamp, then a hand-written aside */
 .hud-tier { margin: 0; display: flex; align-items: baseline; gap: 8px; min-width: 0; white-space: nowrap; line-height: 1; }
 .hud-tier-name { flex: none; font-size: 17px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; text-shadow: 2px 2px 0 #1a0e08; }
-.hud-hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-family: 'Caveat', cursive; font-size: 20px; color: #b9a689; }
+.hud-time { font-size: 18px; font-weight: 600; letter-spacing: 1px; color: var(--bone2); font-variant-numeric: tabular-nums; }
+.hud-time.is-final { color: var(--tab-torch-hi); }
 .hud-right { align-items: flex-end; }
 .logo {
   margin: 0;
@@ -142,6 +143,21 @@ body {
   pointer-events: none;
 }
 .card-layer-top { top: 6px; bottom: auto; }
+/* victory: the result over the dark while the dwarf cheers in his own torchlight */
+.victory { pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 10px 8px 4px; animation: rise 0.5s steps(6); }
+.victory-title { margin: 0; font-size: 34px; font-weight: 600; line-height: 1; color: var(--tab-torch-hi); text-shadow: 0 0 14px rgba(255, 190, 90, 0.35), 2px 2px 0 #2a1306; }
+.victory-time { margin: 0; font-size: 44px; font-weight: 600; line-height: 1; letter-spacing: 2px; color: var(--bone3); font-variant-numeric: tabular-nums; text-shadow: 2px 2px 0 #1a0e08; }
+.victory-standing { margin: 0; font-size: 15px; color: var(--bone2); }
+.victory-standing b { font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
+.standing-pioneer { color: #f2a54a; }
+.standing-pathfinder { color: var(--bone3); }
+.standing-wayfarer { color: #b9a08f; }
+.standing-grave-walker { color: #8b8fa0; }
+.victory-streak { margin: 0; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--stone8); }
+.victory-actions { justify-content: center; margin-top: 4px; }
+.end-links { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+.link { padding: 2px 0; border: 0; background: none; font: inherit; font-size: 13px; color: var(--stone8); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.link:disabled { opacity: 0.6; cursor: default; text-decoration: none; }
 /* death: no panel, just words and a way back, low in the dark beneath your ghost */
 .death { pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 10px 8px 4px; animation: rise 0.4s steps(6); }
 .death-title { margin: 0; font-size: 34px; font-weight: 600; line-height: 1; color: #cfe0f5; text-shadow: 0 0 12px rgba(150, 190, 255, 0.35), 2px 2px 0 #0b1222; }
@@ -328,8 +344,22 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card, .toast, .scroll, .death, .map-full, .btn-compass.is-truth { animation: none; }
+  .card, .toast, .scroll, .death, .victory, .map-full, .btn-compass.is-truth { animation: none; }
 }
+
+/* ── a shared result post: the game card under the player's caption ── */
+.result-post { align-items: center; justify-content: center; padding: 12px; background: radial-gradient(circle at 50% 40%, #2a1a10 0%, #000 70%); }
+.result-card { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; padding: 14px 18px 16px; max-width: 360px; width: 100%; }
+.result-brand { margin: 0; font-family: 'Jacquard 24', var(--font); font-size: clamp(44px, 14vw, 60px); line-height: 0.95; color: #e0b46a; text-shadow: 0 3px 0 #3a1d0e; white-space: nowrap; }
+.result-room { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: var(--bone3); }
+.result-day { margin: 0; font-size: 13px; color: var(--stone8); }
+.result-slab { margin: 6px 0 2px; }
+.result-who { margin: 0; font-size: 15px; color: var(--bone2); }
+.result-time { margin: 0; font-size: 52px; font-weight: 600; line-height: 1; letter-spacing: 2px; color: var(--tab-torch-hi); font-variant-numeric: tabular-nums; text-shadow: 2px 2px 0 #2a1306; }
+.result-standing { margin: 0; font-size: 15px; color: var(--bone2); }
+.result-standing b { font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
+.result-streak { margin: 2px 0 0; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--stone8); }
+.result-play { margin-top: 8px; }
 
 /* ── feed preview (inline launch screen) ─────────── */
 .splash { position: relative; height: 100%; background: #000; cursor: pointer; overflow: hidden; }

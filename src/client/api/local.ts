@@ -20,6 +20,12 @@ const board = generateBoard(day);
 const seed = async () => {
   const rand = mulberry32(day * 101 + 5);
   for (const ghost of GHOSTS) {
+    // each simulated walker started a while ago, so their crossing times vary like real ones
+    const realNow = Date.now;
+    const ago = 25_000 + Math.floor(rand() * 240_000);
+    Date.now = () => realNow() - ago;
+    await engine.start(day, ghost);
+    Date.now = realNow;
     for (let life = 0; life < CANDLES_PER_DAY; life++) {
       const path: Cell[] = [];
       let at: Cell = START;
@@ -61,11 +67,12 @@ export const localApi: GameApi = {
   cross: (d, path) => wait(Promise.resolve()).then(() => engine.cross(d, ME, path)),
   carve: (d, i, arrow) => wait(Promise.resolve()).then(() => engine.carve(d, ME, i, arrow)),
   skip: (d, i) => wait(Promise.resolve()).then(() => engine.skip(d, ME, i)),
-  share: (d) =>
+  start: (d) => wait(Promise.resolve()).then(() => engine.start(d, ME)),
+  share: (d, caption) =>
     wait(Promise.resolve())
-      .then(() => engine.claimShare(d, ME))
-      .then((text) => { console.info('[local preview] would comment:\n' + text); return engine.confirmShare(d, ME, true); })
-      .then((me) => ({ type: 'share' as const, me })),
+      .then(() => engine.claimShare(d, ME, caption))
+      .then((post) => { console.info('[local preview] would post:', post); return engine.confirmShare(d, ME, true); })
+      .then((me) => ({ type: 'share' as const, me, url: null })),
   join: () => wait(Promise.resolve()).then(() => ({ type: 'join' as const })),
   flair: (d) => wait(Promise.resolve()).then(() => engine.flairFor(d, ME)).then((f) => ({ type: 'flair' as const, text: f.text })),
 };

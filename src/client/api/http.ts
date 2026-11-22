@@ -21,7 +21,8 @@ export const httpApi: GameApi = {
   cross: (day, path) => call('cross', { day, path }),
   carve: (day, i, arrow) => call('carve', { day, i, arrow }),
   skip: (day, i) => call('skip', { day, i }),
-  share: (day) => call('share', { day }),
+  start: (day) => call('start', { day }),
+  share: (day, caption) => call('share', { day, caption }),
   join: () => call('join', {}),
   flair: (day) => call('flair', { day }),
 };
