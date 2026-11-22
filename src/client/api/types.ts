@@ -7,6 +7,7 @@ import type {
   JoinResponse,
   FlairResponse,
   ShareResponse,
+  SkipResponse,
   InitResponse,
 } from '../../shared/api';
 
@@ -15,6 +16,7 @@ export type GameApi = {
   fall: (day: number, path: Cell[]) => Promise<FallResponse>;
   cross: (day: number, path: Cell[]) => Promise<CrossResponse>;
   carve: (day: number, i: number, arrow: Direction) => Promise<CarveResponse>;
+  skip: (day: number, i: number) => Promise<SkipResponse>;
   share: (day: number) => Promise<ShareResponse>;
   join: () => Promise<JoinResponse>;
   flair: (day: number) => Promise<FlairResponse>;

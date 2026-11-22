@@ -43,7 +43,11 @@ const seed = async () => {
       const truth = directionBetween(stone, at) ?? 0;
       const options = validDirections(stone).filter((d) => d !== truth);
       const arrow = rand() < 0.65 || !options.length ? truth : options[Math.floor(rand() * options.length)]!;
-      if (fell.me.uncarved !== null) await engine.carve(day, ghost, fell.grave.i, arrow);
+      if (fell.me.uncarved !== null) {
+        // like real players, about half skip carving unless it's their last candle
+        if (fell.me.uncarvedSkippable && rand() < 0.5) await engine.skip(day, ghost, fell.grave.i);
+        else await engine.carve(day, ghost, fell.grave.i, arrow);
+      }
     }
   }
 };
@@ -56,6 +60,7 @@ export const localApi: GameApi = {
   fall: (d, path) => wait(Promise.resolve()).then(() => engine.fall(d, ME, path)),
   cross: (d, path) => wait(Promise.resolve()).then(() => engine.cross(d, ME, path)),
   carve: (d, i, arrow) => wait(Promise.resolve()).then(() => engine.carve(d, ME, i, arrow)),
+  skip: (d, i) => wait(Promise.resolve()).then(() => engine.skip(d, ME, i)),
   share: (d) =>
     wait(Promise.resolve())
       .then(() => engine.claimShare(d, ME))

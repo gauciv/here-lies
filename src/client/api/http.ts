@@ -20,6 +20,7 @@ export const httpApi: GameApi = {
   fall: (day, path) => call('fall', { day, path }),
   cross: (day, path) => call('cross', { day, path }),
   carve: (day, i, arrow) => call('carve', { day, i, arrow }),
+  skip: (day, i) => call('skip', { day, i }),
   share: (day) => call('share', { day }),
   join: () => call('join', {}),
   flair: (day) => call('flair', { day }),
