@@ -2,10 +2,10 @@ import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, us
 import { CANDLES_PER_DAY, dayStartUtc, difficultyOf } from '../../shared/board';
 import type { DayDto, MeDto } from '../../shared/api';
 import { pioneerTitle } from '../../shared/pioneer';
-import { CAMP_H, CAMP_W, CampScene } from '../engine/camp';
+import { CAMP_H, CAMP_W, CampScene, type CampCue } from '../engine/camp';
 import { dateLabel } from './format';
 
-export type StandbyHandle = { enter: (onDone: () => void) => void };
+export type StandbyHandle = { enter: (onDone: () => void, onCue?: (cue: CampCue) => void) => void };
 
 const useCountdown = (day: number): string => {
   const [now, setNow] = useState(() => Date.now());
@@ -32,7 +32,9 @@ const CampCanvas = forwardRef<StandbyHandle, { maxScale?: number }>(({ maxScale 
     return () => s.stop();
   }, []);
 
-  useImperativeHandle(ref, () => ({ enter: (onDone) => scene.current?.enter(onDone) ?? onDone() }), []);
+  useImperativeHandle(ref, () => ({
+    enter: (onDone, onCue) => { if (scene.current) scene.current.enter(onDone, onCue); else onDone(); },
+  }), []);
 
   useLayoutEffect(() => {
     const el = wrap.current;
@@ -47,7 +49,7 @@ const CampCanvas = forwardRef<StandbyHandle, { maxScale?: number }>(({ maxScale 
   return (
     <div ref={wrap} className="camp-stage">
       <canvas ref={canvas} className="scene" style={{ width: CAMP_W * scale, height: CAMP_H * scale }} role="img"
-        aria-label="An adventurer rests by a campfire in a small dungeon room. A door leads to the crossing." />
+        aria-label="A dwarf rests by a campfire in the dark. Somewhere beyond the light is a door." />
     </div>
   );
 });
@@ -61,60 +63,67 @@ const status = (me: MeDto): string => {
   return 'The door is waiting. Three candles, one crossing.';
 };
 
-/** The standby screen: a quiet room and a parchment that keeps your record. */
-export const Standby = forwardRef<StandbyHandle, {
-  day: DayDto | null; me: MeDto | null; busy: boolean; onEnter: (e: MouseEvent) => void; onReview: (e: MouseEvent) => void; compact?: boolean;
-}>(({ day, me, busy, onEnter, onReview, compact = false }, ref) => {
+/** Your record, kept on a parchment you open when you want it. */
+const Record = ({ day, me, finished, onHide }: { day: DayDto | null; me: MeDto | null; finished: boolean; onHide: () => void }) => {
   const countdown = useCountdown(day?.day ?? 1);
-  const finished = !!me && (me.crossed || me.candles <= 0) && me.uncarved === null;
   const diff = day ? difficultyOf(day.day) : null;
   const tier = diff?.name ?? '';
   return (
-    <div className={`standby${compact ? ' standby-compact' : ''}`}>
-      <CampCanvas ref={ref} maxScale={compact ? 3 : 4} />
-      <section className="parchment" aria-label="Your record">
-        <p className="parch-title">Here Lies</p>
-        {day && (compact ? (
-          // the feed post stays light: the room, the day, the tier, your streak
-          <>
-            <p className="parch-room">{day.room}</p>
-            <p className="parch-line">
-              Day {day.day} · {dateLabel(day.day)} · <b className={`parch-tier parch-${tier.toLowerCase()}`}>{tier}</b>
-            </p>
-          </>
-        ) : (
-          <>
-            <p className="parch-line">Day {day.day} · {dateLabel(day.day)}</p>
-            <p className="parch-room">{day.room}</p>
-            <p className="parch-line">
-              <b className={`parch-tier parch-${tier.toLowerCase()}`}>{tier}</b>{diff ? ` · ${diff.hint}` : ''}
-            </p>
-          </>
-        ))}
-        {me && (
-          <p className="parch-streak">
-            {me.streak > 0 ? (
-              <><span className="parch-big">{me.streak}</span> day streak{me.bestStreak > me.streak ? ` · best ${me.bestStreak}` : ''}</>
-            ) : me.bestStreak > 0 ? (
-              compact ? <>Streak broken · best {me.bestStreak}</> : <>Streak broken · best {me.bestStreak}. Cross today to start anew.</>
-            ) : (
-              compact ? <>{status(me)}</> : <>No streak yet. Cross today to begin one.</>
-            )}
+    <section className="parchment" id="camp-record" aria-label="Your record">
+      {day && (
+        <>
+          <p className="parch-line">Day {day.day} · {dateLabel(day.day)}</p>
+          <p className="parch-room">{day.room}</p>
+          <p className="parch-line">
+            <b className={`parch-tier parch-${tier.toLowerCase()}`}>{tier}</b>{diff ? ` · ${diff.hint}` : ''}
           </p>
-        )}
-        {!compact && day && <p className="parch-line">Today {day.fallen} fell · {day.crossed} crossed</p>}
-        {!compact && me && <p className="parch-status">{status(me)}</p>}
-        <div className="parch-actions">
-          {finished ? (
-            <>
-              <button className="btn btn-share" onClick={onReview}>Review the room</button>
-              <span className="parch-note">New room in {countdown}</span>
-            </>
+        </>
+      )}
+      {me && (
+        <p className="parch-streak">
+          {me.streak > 0 ? (
+            <><span className="parch-big">{me.streak}</span> day streak{me.bestStreak > me.streak ? ` · best ${me.bestStreak}` : ''}</>
+          ) : me.bestStreak > 0 ? (
+            <>Streak broken · best {me.bestStreak}. Cross today to start anew.</>
           ) : (
-            <button className="btn btn-share btn-enter" disabled={busy || !me} onClick={onEnter}>Enter the dungeon</button>
+            <>No streak yet. Cross today to begin one.</>
           )}
-        </div>
-      </section>
+        </p>
+      )}
+      {day && <p className="parch-line">Today {day.fallen} fell · {day.crossed} crossed</p>}
+      {me && <p className="parch-status">{status(me)}</p>}
+      {finished && <p className="parch-note">New room in {countdown}</p>}
+      <button className="btn btn-hide" onClick={onHide}>Hide</button>
+    </section>
+  );
+};
+
+/**
+ * The standby screen: the title, a dwarf by a fire in the dark, and one way on.
+ * Your record stays folded away until you ask for it.
+ */
+export const Standby = forwardRef<StandbyHandle, {
+  day: DayDto | null; me: MeDto | null; busy: boolean; onEnter: (e: MouseEvent) => void; onReview: (e: MouseEvent) => void; compact?: boolean;
+}>(({ day, me, busy, onEnter, onReview, compact = false }, ref) => {
+  const [open, setOpen] = useState(false);
+  const finished = !!me && (me.crossed || me.candles <= 0) && me.uncarved === null;
+  return (
+    <div className={`standby${compact ? ' standby-compact' : ''}`}>
+      <h1 className="camp-title">Here Lies</h1>
+      <div className="camp-middle">
+        <CampCanvas ref={ref} maxScale={compact ? 3 : 4} />
+        {open && <Record day={day} me={me} finished={finished} onHide={() => setOpen(false)} />}
+      </div>
+      <div className="camp-actions">
+        {finished ? (
+          <button className="btn btn-share btn-enter" onClick={onReview}>Review the room</button>
+        ) : (
+          <button className="btn btn-share btn-enter" disabled={busy || !me} onClick={onEnter}>Enter the dungeon</button>
+        )}
+        <button className="btn btn-record" aria-expanded={open} aria-controls="camp-record" onClick={() => setOpen(!open)}>
+          {open ? 'Hide record' : 'Your record'}
+        </button>
+      </div>
     </div>
   );
 });

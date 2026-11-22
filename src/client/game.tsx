@@ -72,9 +72,8 @@ export const App = () => {
   const enter = useCallback(() => {
     if (entering) return;
     setEntering(true);
-    sound.play('door');
-    if (standby.current) standby.current.enter(() => crossFade('board'));
-    else crossFade('board');
+    if (standby.current) standby.current.enter(() => crossFade('board'), (cue) => sound.play(cue));
+    else { sound.play('door'); crossFade('board'); }
   }, [entering, crossFade]);
 
   useEffect(() => {
