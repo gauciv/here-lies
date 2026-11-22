@@ -74,6 +74,11 @@ body {
 .hud-sub { font-size: 13px; color: var(--stone8); }
 .hud-sub b { font-weight: 600; }
 .num-fallen { color: var(--red2); }
+.tier { font-weight: 600; }
+.tier-gentle { color: var(--moss3); filter: brightness(1.6); }
+.tier-tricky { color: var(--warm5); }
+.tier-cruel { color: var(--warm4); }
+.tier-brutal { color: var(--red2); }
 .num-crossed { color: var(--warm5); }
 .candles { display: flex; gap: 4px; }
 

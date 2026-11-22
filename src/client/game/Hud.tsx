@@ -1,4 +1,4 @@
-import { CANDLES_PER_DAY } from '../../shared/board';
+import { CANDLES_PER_DAY, difficultyOf } from '../../shared/board';
 import { dateLabel } from './format';
 import type { DayDto, MeDto } from '../../shared/api';
 import { PixelIcon } from './PixelIcon';
@@ -8,7 +8,9 @@ export const Hud = ({ day, me }: { day: DayDto; me: MeDto }) => (
   <header className="hud">
     <div className="hud-brand">
       <h1 className="logo">Here Lies</h1>
-      <span className="hud-sub">Day {day.day} · {dateLabel(day.day)}</span>
+      <span className="hud-sub">
+        Day {day.day} · {dateLabel(day.day)} · <b className={`tier tier-${difficultyOf(day.day).name.toLowerCase()}`}>{difficultyOf(day.day).name}</b>
+      </span>
     </div>
     <div className="hud-right">
       <div className="candles" aria-label={`${me.candles} of ${CANDLES_PER_DAY} candles left`}>
