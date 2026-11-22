@@ -265,7 +265,7 @@ export const useGame = () => {
     if (s.phase === 'crossed' || s.phase === 'idle') return s.graves.size ? 'The dark has lifted. Tap any grave to judge it.' : '';
     if (s.phase !== 'walking') return '';
     const seen = s.revealed.size;
-    if (seen <= 1 && s.walkedThisRun === 0) return 'Tap a glowing stone to step.';
+    if (seen <= 1 && s.walkedThisRun === 0) return 'Reach the light under the far door. Tap a glowing stone to step.';
     if (seen <= 3) return 'A number counts the pits touching that stone.';
     if (s.graves.size && seen <= 6) return 'Graves mark where others fell. Tap one in your light.';
     return 'Reach the far wall.';

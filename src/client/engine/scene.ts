@@ -392,6 +392,17 @@ export class Scene {
     // ── emissive layer ──
     const blink = (seed: number, rate: number) => hash2(Math.floor(t * rate), Math.floor(seed * 1000));
 
+    // daylight leaking under the far door: the goal, visible from anywhere
+    if (crossP < 0.08) {
+      for (let k = 0; k < 24; k++) {
+        const on = this.reduced || blink(40 + k, 3) > 0.25;
+        if (!on) continue;
+        const col: ColorKey = k > 6 && k < 17 ? (blink(80 + k, 5) > 0.5 ? 'warm6' : 'warm5') : 'warm3';
+        this.px(ctx, col, DOOR_X + 4 + k, 31);
+      }
+      if (!this.reduced && blink(99, 2) > 0.6) this.px(ctx, 'warm4', DOOR_X + 15, 30, 2, 1);
+    }
+
     // step markers: corner brackets on stones you can step to
     if (s.phase === 'walking' && this.hopT0 < 0) {
       const pulse = this.reduced ? 1 : 0.5 + 0.5 * Math.sin(t * 4);
