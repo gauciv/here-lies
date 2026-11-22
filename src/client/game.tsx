@@ -11,7 +11,7 @@ import { useGame } from './game/useGame';
 import type { GraveView, SceneState } from './engine/scene';
 
 export const App = () => {
-  const { s, tap, onFallDone, onCrossDone, carve, share, join, flair, walkAgain, startPlaying, openHelp, closeCard, hint } = useGame();
+  const { s, tap, onFallDone, onCrossDone, carve, skip, share, join, flair, walkAgain, startPlaying, openHelp, closeCard, hint } = useGame();
 
   const scene = useMemo<SceneState | null>(() => {
     if (!s.board) return null;
@@ -26,6 +26,7 @@ export const App = () => {
         mine: g.mine,
         // the truth is only shown once your run is over
         truth: revealAll && arrow !== null ? arrowIsTrue(board, g.i, arrow) : null,
+        wear: g.top?.visits ?? 0,
       });
     });
     const knownPits = new Set(s.me?.fellInto ?? []);
@@ -57,7 +58,7 @@ export const App = () => {
             {card.kind === 'intro' && <IntroCard onStart={startPlaying} />}
             {card.kind === 'fellAgain' && <FellAgainCard me={s.me} reason={card.reason} onWalk={walkAgain} />}
             {card.kind === 'carve' && (
-              <CarveCard me={s.me} step={carveStep} stone={cellOf(card.i)} fellToward={directionBetween(cellOf(card.i), s.player)} onCarve={carve} />
+              <CarveCard me={s.me} step={carveStep} stone={cellOf(card.i)} fellToward={directionBetween(cellOf(card.i), s.player)} onCarve={carve} onSkip={skip} />
             )}
             {card.kind === 'crossed' && <CrossedCard me={s.me} day={s.day} onClose={closeCard} onShare={share} onJoin={join} onFlair={flair} />}
             {card.kind === 'spent' && <SpentCard me={s.me} day={s.day} onClose={closeCard} onShare={share} onJoin={join} />}

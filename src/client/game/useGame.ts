@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { START, cellOf, generateBoard, idx, isStep, type Board, type Cell } from '../../shared/board';
-import type { Direction } from '../../shared/epitaphs';
+import { CRUMBLE_AFTER, type Direction } from '../../shared/epitaphs';
 import type { CrossResponse, DayDto, FallResponse, GraveDto, MeDto } from '../../shared/api';
 import { loadApi, type GameApi } from '../api';
 import { isLit, type Phase } from '../engine/scene';
@@ -74,9 +74,11 @@ export const useGame = () => {
     window.setTimeout(() => setS((p) => (p.toast === msg ? { ...p, toast: null } : p)), 2600);
   }, []);
 
+  /** Only slabs that carry an arrow are on the board; blank ones stay hidden. */
   const putGrave = (graves: Map<number, GraveDto>, g: GraveDto) => {
     const next = new Map(graves);
-    next.set(g.i, g);
+    if (g.top) next.set(g.i, g);
+    else next.delete(g.i);
     return next;
   };
 
@@ -140,6 +142,7 @@ export const useGame = () => {
     }
     const api = apiRef.current;
     if (!api) return;
+    const alreadyStoodHere = path.current.some((p) => p.c === cell.c && p.r === cell.r);
     path.current = [...path.current, cell];
     const walked = [...path.current];
     if (board.pits[i]) {
@@ -160,6 +163,24 @@ export const useGame = () => {
       revealed.add(i);
       return { ...p, player: cell, revealed, phase: crossing ? 'crossing' : 'walking', walkedThisRun: p.walkedThisRun + 1 };
     });
+    // stepping onto someone else's slab wears it; the fifth walker breaks it
+    if (g && g.top && !crossing && !alreadyStoodHere && g.top.user !== s.me?.username) {
+      const visits = g.top.visits + 1;
+      if (visits >= CRUMBLE_AFTER) {
+        window.setTimeout(() => {
+          sound.play('crumble');
+          toast('The slab crumbles to dust.');
+          setS((p) => {
+            const graves = new Map(p.graves);
+            graves.delete(i);
+            return { ...p, graves, card: p.card.kind === 'grave' && p.card.i === i ? { kind: 'none' } : p.card };
+          });
+        }, 220);
+        return;
+      }
+      const worn: GraveDto = { ...g, top: { ...g.top, visits } };
+      setS((p) => ({ ...p, graves: putGrave(p.graves, worn) }));
+    }
     // stepping onto a slab reads it
     if (g && !crossing && g.top) window.setTimeout(() => openGrave(i), 200);
   }, [s, openGrave, toast]);
@@ -211,6 +232,18 @@ export const useGame = () => {
       });
     } catch (e) {
       toast(e instanceof Error ? e.message : 'The chisel slipped. Try again.');
+    }
+  }, [s, toast]);
+
+  const skip = useCallback(async () => {
+    const api = apiRef.current;
+    const { card, day } = s;
+    if (!api || !day || card.kind !== 'carve') return;
+    try {
+      const res = await api.skip(day.day, card.i);
+      setS((p) => resetRun({ ...p, me: res.me }));
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not skip.');
     }
   }, [s, toast]);
 
@@ -283,5 +316,5 @@ export const useGame = () => {
     setS((p) => (p.card.kind === 'fellAgain' ? resetRun(p) : p));
   }, []);
 
-  return { s, tap, onFallDone, onCrossDone, carve, share, join, flair, walkAgain, startPlaying, openHelp, closeCard, hint };
+  return { s, tap, onFallDone, onCrossDone, carve, skip, share, join, flair, walkAgain, startPlaying, openHelp, closeCard, hint };
 };

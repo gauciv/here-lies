@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CANDLES_PER_DAY, dayStartUtc } from '../../shared/board';
-import { arrowIsTrue, directionName, isForgotten, validDirections, type Direction } from '../../shared/epitaphs';
+import { CRUMBLE_AFTER, arrowIsTrue, directionName, isForgotten, validDirections, type Direction } from '../../shared/epitaphs';
 import type { Board, Cell } from '../../shared/board';
 import { arrowRows } from '../engine/sprites';
 import type { ColorKey } from '../engine/palette';
@@ -85,10 +85,10 @@ const ArrowRecord = ({ mine }: { mine: MyArrowDto }) => (
   <div className="arrow-record">
     <span className="slab-arrow slab-arrow-sm"><Arrow dir={mine.arrow} color={mine.truthful ? 'warm4' : 'red2'} size={3} /></span>
     <p className="card-meta">
-      Your arrow {mine.truthful ? 'told the truth' : 'lied'}.{' '}
+      Your arrow {mine.truthful ? 'told the truth' : 'lied'}{mine.crumbled ? ` and has crumbled after ${times(mine.visits)}` : ''}.{' '}
       {mine.truthful
-        ? mine.saved ? `It has saved ${times(mine.saved)} so far.` : 'Nobody has heeded it yet.'
-        : mine.fooled ? `It has fooled ${times(mine.fooled)} so far.` : 'Nobody has fallen for it yet.'}
+        ? mine.saved ? `It saved ${times(mine.saved)}.` : mine.crumbled ? 'Nobody heeded it.' : 'Nobody has heeded it yet.'
+        : mine.fooled ? `It fooled ${times(mine.fooled)}.` : mine.crumbled ? 'Nobody fell for it.' : 'Nobody has fallen for it yet.'}
     </p>
   </div>
 );
@@ -136,7 +136,10 @@ export const GraveCard = ({ grave, me, board, judged, onClose }: {
           ) : (
             <p className="card-meta">Is it the truth? You'll know when your run is over.</p>
           )}
-          <p className="card-foot">{fellHere}{isForgotten(top.user) ? ' · long before today' : ` · on step ${top.step}`}</p>
+          <p className="card-foot">
+            {fellHere}{isForgotten(top.user) ? ' · long before today' : ` · on step ${top.step}`}
+            {top.visits > 0 && ` · crumbles after ${times(Math.max(1, CRUMBLE_AFTER - top.visits))} more`}
+          </p>
         </>
       ) : (
         <>
@@ -168,17 +171,19 @@ export const FellAgainCard = ({ me, reason, onWalk }: { me: MeDto; reason: 'carv
 /** Compass layout: grid position → direction (null = the slab itself). */
 const COMPASS: readonly (Direction | null)[] = [7, 0, 1, 6, null, 2, 5, 4, 3];
 
-export const CarveCard = ({ me, step, stone, fellToward, onCarve }: {
-  me: MeDto; step: number | null; stone: Cell; fellToward: Direction | null; onCarve: (d: Direction) => void;
+export const CarveCard = ({ me, step, stone, fellToward, onCarve, onSkip }: {
+  me: MeDto; step: number | null; stone: Cell; fellToward: Direction | null; onCarve: (d: Direction) => void; onSkip: () => void;
 }) => {
   const [busy, setBusy] = useState(false);
   const valid = validDirections(stone);
   return (
     <section className="card card-carve" aria-label="Carve your arrow">
-      <p className="card-kicker">Here lies you</p>
+      <p className="card-kicker">{me.uncarvedSkippable ? 'Here lies you' : 'Your last candle'}</p>
       <p className="epitaph">{fellToward !== null ? `You fell ${directionName(fellToward)}.` : 'The stone gave way.'}</p>
       <p className="card-meta">
-        Carve an arrow on the stone you stood on{step ? ` (step ${step})` : ''}. Point at the pit, or lie.
+        {me.uncarvedReplaces
+          ? 'Someone already carved this stone. Your arrow replaces theirs, and the old one crumbles.'
+          : `Carve an arrow on the stone you stood on${step ? ` (step ${step})` : ''}. Point at the pit, or lie.`}
       </p>
       <div className="compass" role="group" aria-label="Choose an arrow">
         {COMPASS.map((d, k) =>
@@ -197,9 +202,14 @@ export const CarveCard = ({ me, step, stone, fellToward, onCarve }: {
           )
         )}
       </div>
-      <p className="card-foot">
-        {me.candles > 0 ? `${me.candles} of ${CANDLES_PER_DAY} candles left. Your next walk begins at the stairs.` : 'That was your last candle.'}
-      </p>
+      {me.uncarvedSkippable ? (
+        <div className="carve-skip">
+          <button className="btn" disabled={busy} onClick={() => { setBusy(true); onSkip(); }}>Skip for now</button>
+          <p className="card-foot">You carve once a day. Skip, and you can carve on a later fall; your last candle must carve.</p>
+        </div>
+      ) : (
+        <p className="card-foot">You must leave your mark before the dark takes you.</p>
+      )}
     </section>
   );
 };
