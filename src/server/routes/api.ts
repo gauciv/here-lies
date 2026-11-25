@@ -119,6 +119,14 @@ api.post('/share', async (c) => {
   }
 });
 
+api.get('/day/:day', async (c) => {
+  try {
+    return c.json(await engine.pastDay(Number(c.req.param('day')), await username()));
+  } catch (e) {
+    return fail(c, e);
+  }
+});
+
 api.post('/start', async (c) => {
   try {
     const body = await readBody(c);

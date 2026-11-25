@@ -283,6 +283,28 @@ void test('concurrent skip and carve requests settle a fall exactly once', async
   assert.ok([a.me, b.me].filter((m) => m.uncarved !== null && !m.uncarvedQueued).length <= 1);
 });
 
+void test('each run is kept for the map, the week is summarised, and only finished days reveal', async () => {
+  const e = new Engine(new MemoryStore());
+  const f = await e.fall(DAY, 'mapper', pitPath);
+  if (f.me.uncarved !== null) await e.skip(DAY, 'mapper', f.me.uncarved);
+  await e.start(DAY, 'mapper');
+  const c = await e.cross(DAY, 'mapper', crossPath);
+  assert.equal(c.me.runs.length, 2, 'one run per attempt');
+  assert.equal(c.me.runs[0]![0], idx(START.c, START.r), 'runs start at the entrance');
+  assert.equal(c.me.runs[0]!.length, pitPath.length + 1);
+  assert.deepEqual(c.me.runs[1]!.slice(1), crossPath.map((p) => idx(p.c, p.r)));
+  const init = await e.init(DAY, 'mapper', 't3_x');
+  const today = init.week.at(-1)!;
+  assert.equal(today.day, DAY);
+  assert.equal(today.crossed, true);
+  assert.equal(today.fell, 1);
+  assert.ok(init.week.length <= 7);
+  // today's room never reveals; a finished day does
+  await assert.rejects(e.pastDay(DAY, 'mapper'), /not revealed/);
+  await assert.rejects(e.pastDay(DAY + 1, 'mapper'), /not revealed/);
+  if (DAY > 1) assert.equal((await e.pastDay(DAY - 1, 'mapper')).type, 'pastDay');
+});
+
 void test('rejects forged runs', async () => {
   const e = new Engine(new MemoryStore());
   await assert.rejects(e.cross(DAY, 'dave', [{ c: 3, r: 0 }]), GameError);

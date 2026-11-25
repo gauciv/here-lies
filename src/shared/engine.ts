@@ -10,7 +10,7 @@ import { CANDLES_PER_DAY, ROWS, cellOf, dayNumber, difficultyOf, generateBoard, 
 import { CRUMBLE_AFTER, FORGOTTEN, MAX_ARROWS, arrowIsTrue, directionBetween, isAnonymous, isDirection, validDirections } from './epitaphs';
 import { canShare, cleanCaption, defaultCaption, resultPost, type ResultPost } from './share';
 import { standingFlair, standingOf, type Flair, type Standing } from './pioneer';
-import type { StartResponse, CarveResponse, CrossResponse, DayDto, EpitaphDto, FallResponse, GraveDto, InitResponse, MeDto, MyArrowDto, SkipResponse } from './api';
+import type { PastDayResponse, WeekDayDto, StartResponse, CarveResponse, CrossResponse, DayDto, EpitaphDto, FallResponse, GraveDto, InitResponse, MeDto, MyArrowDto, SkipResponse } from './api';
 
 export type Store = {
   get(key: string): Promise<string | undefined>;
@@ -72,6 +72,18 @@ const parseList = (v: string | undefined): number[] => {
   }
 };
 
+const parseRuns = (v: string | undefined): number[][] => {
+  if (!v) return [];
+  try {
+    const parsed: unknown = JSON.parse(v);
+    return Array.isArray(parsed)
+      ? parsed.filter((r): r is number[] => Array.isArray(r) && r.every((x) => Number.isInteger(x)))
+      : [];
+  } catch {
+    return [];
+  }
+};
+
 const isCellArray = (v: unknown): v is Cell[] =>
   Array.isArray(v) &&
   v.every((p) => typeof p === 'object' && p !== null && 'c' in p && 'r' in p && Number.isInteger(p.c) && Number.isInteger(p.r));
@@ -125,6 +137,7 @@ export class Engine {
       uncarvedSkippable: u.uncarvedSkippable === '1',
       uncarvedQueued: u.uncarvedQueued === '1',
       fellInto: parseList(u.fellAt),
+      runs: parseRuns(u.runs),
       streak: last >= day - 1 ? num(st.count) : 0,
       bestStreak: Math.max(num(st.best), last >= day - 1 ? num(st.count) : 0),
       shared: u.shared === '1',
@@ -266,8 +279,30 @@ export class Engine {
 
   async init(day: number, user: string, postId: string): Promise<InitResponse> {
     await this.ensureSeeded(day);
-    const [dayDto, me, graves] = await Promise.all([this.dayDto(day), this.me(day, user), this.graves(day, user)]);
-    return { type: 'init', postId, day: dayDto, graves, me };
+    const [dayDto, me, graves, week] = await Promise.all([this.dayDto(day), this.me(day, user), this.graves(day, user), this.week(day, user)]);
+    return { type: 'init', postId, day: dayDto, graves, me, week };
+  }
+
+  /** This player's last seven days, ending with this one: what they did in each room. */
+  private async week(day: number, user: string): Promise<WeekDayDto[]> {
+    const days = Array.from({ length: 7 }, (_, k) => day - 6 + k).filter((d) => d >= 1);
+    return Promise.all(days.map(async (d) => {
+      const u = await this.store.hGetAll(K.user(d, user));
+      const spent = num(u.spent);
+      return {
+        day: d,
+        played: spent > 0 || u.crossed === '1' || !!u.startedAt,
+        crossed: u.crossed === '1',
+        time: u.time ? num(u.time) : null,
+        fell: spent,
+      };
+    }));
+  }
+
+  /** A finished day's slabs, for its full answer. Never today's: that would spoil the room. */
+  async pastDay(day: number, user: string): Promise<PastDayResponse> {
+    if (!Number.isInteger(day) || day < 1 || day >= dayNumber()) throw new GameError('That room is not revealed yet');
+    return { type: 'pastDay', day, graves: await this.graves(day, user) };
   }
 
   /** Every slab that still carries an arrow (only these are on the board). */
@@ -288,7 +323,10 @@ export class Engine {
     const revealed = new Set(parseList(u.revealed));
     revealed.add(idx(board.start.c, board.start.r));
     for (const p of path) if (!board.pits[idx(p.c, p.r)]) revealed.add(idx(p.c, p.r));
-    await this.store.hSet(K.user(day, user), { revealed: JSON.stringify([...revealed]) });
+    // each run, stone by stone from the entrance, for the player's own map
+    const runs = parseRuns(u.runs);
+    runs.push([idx(board.start.c, board.start.r), ...path.map((p) => idx(p.c, p.r))]);
+    await this.store.hSet(K.user(day, user), { revealed: JSON.stringify([...revealed]), runs: JSON.stringify(runs.slice(-8)) });
 
     const arrows = await this.store.hGetAll(K.slabArrow(day));
     const credited = new Set<string>();

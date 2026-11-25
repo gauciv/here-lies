@@ -63,6 +63,8 @@ export type MeDto = {
   uncarvedQueued: boolean;
   /** pits this player has fallen into today (their own hard-won knowledge) */
   fellInto: number[];
+  /** each of today's runs as stone indices from the entrance, for the player's own map */
+  runs: number[][];
   streak: number;
   /** longest crossing streak this player has ever had here */
   bestStreak: number;
@@ -79,13 +81,28 @@ export type MeDto = {
   myArrow: MyArrowDto | null;
 };
 
+/** One day of the player's week, for the map's week page. */
+export type WeekDayDto = {
+  day: number;
+  played: boolean;
+  crossed: boolean;
+  time: number | null;
+  /** candles burned */
+  fell: number;
+};
+
 export type InitResponse = {
   type: 'init';
   postId: string;
   day: DayDto;
   graves: GraveDto[];
   me: MeDto;
+  /** the last seven days, ending with this one */
+  week: WeekDayDto[];
 };
+
+/** A finished day's slabs, for showing its full answer. */
+export type PastDayResponse = { type: 'pastDay'; day: number; graves: GraveDto[] };
 
 export type RunRequest = { day: number; path: Cell[] };
 
