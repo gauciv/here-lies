@@ -120,6 +120,7 @@ export const App = () => {
 
   const card = s.card;
   const grave = card.kind === 'grave' ? s.graves.get(card.i) : undefined;
+  const endActions = (s.phase === 'crossed' || s.phase === 'idle') && s.card.kind === 'none' && !!s.me;
 
   if (view === 'camp') {
     return (
@@ -190,9 +191,9 @@ export const App = () => {
         {s.toast && <div className="toast" role="status">{s.toast}</div>}
       </Stage>
       {mapOpen && <MapOverlay day={s.day} me={s.me} onClose={() => setMapOpen(false)} />}
-      <footer className="hint" aria-live="polite">
-        <span>{s.status === 'loading' ? 'Lighting the torch…' : hint}</span>
-        {(s.phase === 'crossed' || s.phase === 'idle') && s.card.kind === 'none' && s.me && (
+      <footer className={`hint${endActions ? ' has-actions' : ''}`} aria-live="polite">
+        <span className="hint-text">{s.status === 'loading' ? 'Lighting the torch…' : hint}</span>
+        {endActions && (
           <div className="vote-row">
             <button className="btn btn-share btn-result" onClick={openResult}>Your result</button>
             <button className="btn btn-result" onClick={() => crossFade('camp')}>Back to camp</button>

@@ -122,16 +122,24 @@ body {
 }
 
 .hint {
+  /* a fixed height: if the footer grew with its text, the board's space would
+     shrink and its whole-pixel scale would snap down and up as you walk */
+  flex: none;
+  height: 84px;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 6px 14px 14px;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 14px 10px;
   text-align: center;
   font-size: 14px;
+  line-height: 1.35;
   color: var(--stone8);
 }
+.hint-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; max-width: 40ch; }
+.hint.has-actions .hint-text { -webkit-line-clamp: 1; }
 
 /* ── cards: stone tablets in the tileset's own palette ── */
 .card-layer {
