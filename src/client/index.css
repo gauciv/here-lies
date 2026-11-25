@@ -492,7 +492,7 @@ body {
 .standby-compact .camp-title { font-size: clamp(48px, 17vw, 64px); margin: 0; }
 .standby-compact .camp-room { font-size: 15px; letter-spacing: 2px; }
 
-.screen-fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 0.4s steps(6); z-index: 50; }
+.screen-fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 0.4s steps(6); z-index: 90; }
 .screen-fade.on { opacity: 1; }
 .camp-corner { position: absolute; top: 10px; right: 12px; display: flex; gap: 10px; z-index: 5; }
 
@@ -572,7 +572,7 @@ body {
 .tutorial-title { font-weight: 600; font-size: 17px; letter-spacing: 2px; text-transform: uppercase; color: var(--tab-torch-hi); }
 .tutorial-count { flex: 1; font-size: 13px; color: var(--stone8); }
 .tutorial-skip { padding: 2px 10px; border: 2px solid var(--stone6); background: none; font: 600 13px var(--font); color: var(--bone2); cursor: pointer; }
-.tutorial-coach { flex: none; height: 112px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 6px 16px 14px; text-align: center; }
+.tutorial-coach { flex: none; height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 6px 16px 14px; text-align: center; }
 .tutorial-text { margin: 0; max-width: 30ch; font-size: 18px; font-weight: 600; line-height: 1.3; color: var(--bone3); text-shadow: 2px 2px 0 #1a0e08; }
 
 /* ── settings ─────────────────────────────────────── */
@@ -583,3 +583,12 @@ body {
 .settings-row label { display: flex; justify-content: space-between; font-size: 14px; font-weight: 600; color: var(--tab-stone-h); }
 .settings-row input[type='range'] { width: 100%; accent-color: #e19a43; }
 .settings-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+
+/* carving in the tutorial: compass on the left, the verdict and Carve on the right, same height as any step */
+.tutorial-coach.is-carving { gap: 6px; }
+.tutorial-coach.is-carving .tutorial-text { font-size: 14px; max-width: 40ch; }
+.tutorial-carve { display: flex; align-items: center; gap: 14px; }
+.tutorial-compass { --cb: 26px; gap: 2px; }
+.tutorial-compass .compass-core { margin: 6px; }
+.tutorial-carve-side { display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 150px; }
+.tutorial-carve-side .carve-verdict { font-size: 12px; text-align: center; }

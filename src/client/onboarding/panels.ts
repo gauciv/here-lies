@@ -36,9 +36,14 @@ const px = (x: CanvasRenderingContext2D, c: ColorKey, dx: number, dy: number, w 
   x.fillRect(Math.round(dx), Math.round(dy), w, h);
 };
 
+/** the floor on a whole-tile grid, so everything placed on it lines up with its stones */
 const floor = (x: CanvasRenderingContext2D, img: HTMLImageElement, fromRow = 0) => {
-  for (let r = fromRow; r < 4; r++) for (let c = 0; c < 7; c++) tile(x, img, (c + r) % 3 ? 'floor_1' : 'floor_2', c * T, r * T - 8);
+  for (let r = fromRow; r < 4; r++) for (let c = 0; c < 7; c++) tile(x, img, (c + r) % 3 ? 'floor_1' : 'floor_2', c * T, r * T);
 };
+/** where things sit on a stone, exactly as the game places them */
+const at = (c: number, r: number) => ({ x: c * T, y: r * T });
+/** the dwarf standing on a stone: his 16x28 sprite's feet on its lower edge */
+const standing = (c: number, r: number) => ({ x: c * T, y: r * T + 14 - 27 });
 
 /** a pool of light: everything outside it falls away to black */
 const light = (x: CanvasRenderingContext2D, cx: number, cy: number, r: number, tint = 'rgba(255, 170, 80, 0.10)') => {
@@ -70,28 +75,32 @@ const room: Draw = (x, img, t) => {
 /** 2. Its floor hides pits. */
 const fall: Draw = (x, img, t) => {
   floor(x, img);
-  tile(x, img, 'hole', 48, 32);
-  // the dwarf drops into the hole, again and again
+  const pit = at(3, 2);
+  tile(x, img, 'hole', pit.x, pit.y);
+  // the dwarf steps onto the stone and drops through it, again and again
   const k = (t % 2.2) / 2.2;
-  const sink = Math.min(1, k * 1.6);
+  const sink = Math.max(0, Math.min(1, (k - 0.15) * 1.6));
+  const hero = standing(3, 2);
   x.save();
   x.beginPath();
-  x.rect(0, 0, PANEL_W, 44);
+  x.rect(0, 0, PANEL_W, pit.y + 12);
   x.clip();
-  tile(x, img, HERO_RUN[Math.floor(t * 10) % 4] ?? 'floor_1', 48, 16 + sink * 26);
+  tile(x, img, HERO_RUN[Math.floor(t * 10) % 4] ?? 'floor_1', hero.x, hero.y + sink * 26);
   x.restore();
-  if (k > 0.5) for (let n = 0; n < 6; n++) px(x, 'pst3', 50 + n * 2 + Math.sin(n + t * 8) * 2, 40 - (k - 0.5) * 12 * ((n % 3) + 1));
-  light(x, 56, 36, 44);
+  if (k > 0.5) for (let n = 0; n < 6; n++) px(x, 'pst3', pit.x + 2 + n * 2 + Math.sin(n + t * 8) * 2, pit.y + 8 - (k - 0.5) * 12 * ((n % 3) + 1));
+  light(x, pit.x + 8, pit.y + 4, 44);
 };
 
 /** 3. The fallen carve arrows, to warn you or to fool you. */
 const carve: Draw = (x, img, t) => {
   floor(x, img);
   const sp = getSprites();
-  x.drawImage(sp.slab.canvas, 34, 30);
+  const stone = at(2, 2);
+  // the slab sits on its stone exactly as in the game, the arrow carved into it
+  x.drawImage(sp.slab.canvas, stone.x + 2, stone.y + 2);
   // the arrow flickers between a warning and a lie
   const lie = Math.floor(t / 1.1) % 2 === 1;
-  x.drawImage(sp.arrow(lie ? 6 : 2, lie ? 'red2' : 'warm4').canvas, 36, 32);
+  x.drawImage(sp.arrow(lie ? 6 : 2, lie ? 'red2' : 'warm4').canvas, stone.x + 4, stone.y + 4);
   const ghost = sp.ghost[Math.floor(t * 2.5) % 2]!;
   x.save();
   x.globalAlpha = 0.85;
@@ -104,16 +113,19 @@ const carve: Draw = (x, img, t) => {
 const cross: Draw = (x, img, t) => {
   floor(x, img);
   const sp = getSprites();
-  for (const [n, cx, cy] of [[1, 30, 30], [2, 76, 14], [1, 78, 38]] as const) {
-    x.drawImage(sp.digit(n, 'ink').canvas, cx + 1, cy + 1);
-    x.drawImage(sp.digit(n, n === 2 ? 'warm4' : 'bone3').canvas, cx, cy);
+  // numbers drawn on their stones exactly where the game draws them
+  for (const [n, c, r] of [[1, 1, 1], [2, 5, 2], [1, 1, 2]] as const) {
+    const { x: cx, y: cy } = at(c, r);
+    x.drawImage(sp.digit(n, 'ink').canvas, cx + 7, cy + 6);
+    x.drawImage(sp.digit(n, n === 2 ? 'warm4' : 'bone3').canvas, cx + 6, cy + 5);
   }
-  tile(x, img, HERO_IDLE[Math.floor(t * 7) % 4] ?? 'floor_1', 46, 12);
+  const hero = standing(3, 2);
+  tile(x, img, HERO_IDLE[Math.floor(t * 7) % 4] ?? 'floor_1', hero.x, hero.y);
   // torch held out, flame dancing
-  px(x, 'ink', 61, 20, 3, 10);
-  px(x, 'warm2', 62, 21, 1, 8);
-  flame(x, 62, 19, t);
-  light(x, 60, 24, 40 + Math.sin(t * 9) * 1.5);
+  px(x, 'ink', hero.x + 13, hero.y + 8, 3, 10);
+  px(x, 'warm2', hero.x + 14, hero.y + 9, 1, 8);
+  flame(x, hero.x + 14, hero.y + 7, t);
+  light(x, hero.x + 12, hero.y + 12, 40 + Math.sin(t * 9) * 1.5);
 };
 
 export const PANELS: readonly { draw: Draw; caption: string; sfx?: { text: string; tone: 'red' | 'gold' | 'blue' } }[] = [

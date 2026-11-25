@@ -50,8 +50,9 @@ export type SceneState = {
   soulLeaving: boolean;
   /** 'Continue' after crossing: the dwarf walks out through the door */
   exiting: boolean;
-  /** tutorial: a bouncing arrow over the stone to tap next */
+  /** tutorial: a bright frame on a stone; with a bouncing arrow inside it when it's the one to tap */
   hint?: Cell | null;
+  hintTap?: boolean;
 };
 
 /** How far the torch reaches, in tiles (centre to centre). Drawing and tapping share it. */
@@ -621,11 +622,14 @@ export class Scene {
         this.px(ctx, 'warm6', X, Y, TILE, 1); this.px(ctx, 'warm6', X, Y + TILE - 1, TILE, 1);
         this.px(ctx, 'warm6', X, Y, 1, TILE); this.px(ctx, 'warm6', X + TILE - 1, Y, 1, TILE);
       }
-      const bob = this.reduced ? 0 : Math.round(Math.abs(Math.sin(t * 4)) * 2);
-      const ax = X + 8, ay = Y + 4 + bob;
-      const rows = ['..#..', '..#..', '#####', '.###.', '..#..'];
-      rows.forEach((row, ry) => [...row].forEach((ch, rx) => { if (ch === '#') { this.px(ctx, 'ink', ax - 2 + rx + 1, ay + ry + 1); } }));
-      rows.forEach((row, ry) => [...row].forEach((ch, rx) => { if (ch === '#') this.px(ctx, 'warm5', ax - 2 + rx, ay + ry); }));
+      // only a stone to tap gets the arrow: on a stone to look at, it would hide what's there
+      if (s.hintTap) {
+        const bob = this.reduced ? 0 : Math.round(Math.abs(Math.sin(t * 4)) * 2);
+        const ax = X + 8, ay = Y + 4 + bob;
+        const rows = ['..#..', '..#..', '#####', '.###.', '..#..'];
+        rows.forEach((row, ry) => [...row].forEach((ch, rx) => { if (ch === '#') { this.px(ctx, 'ink', ax - 2 + rx + 1, ay + ry + 1); } }));
+        rows.forEach((row, ry) => [...row].forEach((ch, rx) => { if (ch === '#') this.px(ctx, 'warm5', ax - 2 + rx, ay + ry); }));
+      }
     }
 
     // torch: handle, flame, sparks, dust

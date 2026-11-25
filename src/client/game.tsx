@@ -97,6 +97,15 @@ export const App = () => {
     }, 420);
   }, []);
 
+  /** Fade to black, change what's on screen while it's dark, fade back in. */
+  const fadeThrough = useCallback((swap: () => void) => {
+    setFade(true);
+    window.setTimeout(() => {
+      swap();
+      window.setTimeout(() => setFade(false), 140);
+    }, 440);
+  }, []);
+
   const runEnter = useCallback(() => {
     if (entering) return;
     setEntering(true);
@@ -110,16 +119,24 @@ export const App = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const enter = useCallback(() => {
     if (entering) return;
-    if (!isOnboarded()) { setOnboarding({ queue: ['comic', 'tutorial'], thenEnter: true }); return; }
+    if (!isOnboarded()) { fadeThrough(() => setOnboarding({ queue: ['comic', 'tutorial'], thenEnter: true })); return; }
     runEnter();
-  }, [entering, runEnter]);
+  }, [entering, runEnter, fadeThrough]);
   const onboardingStep = () => {
     if (!onboarding) return;
     const rest = onboarding.queue.slice(1);
-    if (rest.length) { setOnboarding({ ...onboarding, queue: rest }); return; }
-    if (onboarding.queue[0] === 'tutorial') { markOnboarded(); startPlaying(); }
-    setOnboarding(null);
-    if (onboarding.thenEnter) runEnter();
+    if (rest.length) { fadeThrough(() => setOnboarding({ ...onboarding, queue: rest })); return; }
+    const finishedTutorial = onboarding.queue[0] === 'tutorial';
+    fadeThrough(() => {
+      if (finishedTutorial) { markOnboarded(); startPlaying(); }
+      setOnboarding(null);
+      // straight from the practice door into today's room: no second trip through the camp
+      if (onboarding.thenEnter) {
+        void startRun();
+        setView('board');
+        sound.setMode('dungeon');
+      }
+    });
   };
 
   useEffect(() => {
