@@ -18,6 +18,10 @@ Every visit starts in the dark. A dwarf rests by a campfire, the only light ther
 
 **Enter the dungeon** sets him moving: he takes up an unlit torch, lights it in the fire and carries it into the dark. A door appears only when his torch reaches it, and he steps through into the day's room. **Your map** unrolls the dwarf's hand-drawn map, also from the scroll button in the game bar. **Today** sketches the room (walls and rock, a red **X** where the door is, *you* at the entrance) and inks in each of your runs as its own line, solid, dashed or dotted, with a skull wherever you died; it shows no one else's graves and no pits you haven't found. **This week** shows each day's room with what you did there (your time, a skull for a lost day), and tapping a finished day opens its full answer: every pit, and every arrow marked gold for the truth or red for a lie. Tap the map to see it full screen. Once you've finished, **Review your run** shows the room in daylight with your own path and the pits you fell into. The full answer waits for tomorrow: once the day is over, **Review the room** on that day's post reveals every pit and every arrow's truth. The camp has its own calm music; the dungeon's is tense.
 
+### First time in
+
+New players don't have to read anything. The first time you press **Enter the dungeon**, a four-panel comic sets the scene in fifteen seconds: the dungeon grows a new room every day, its floor hides pits, the fallen carve arrows to warn you or to fool you. Then a one-minute practice room teaches one thing per line, with a pointer on the stone to tap: stepping, blank stones, numbers, slabs that may lie, and the door. Both can be skipped, and both can be replayed from **Settings** (the gear on the camp), which also has separate music and sound-effect volumes.
+
 ## How to play
 
 1. **Tap a stone next to the dwarf** to step onto it. Glowing corners show where you can step.
