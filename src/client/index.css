@@ -428,6 +428,25 @@ body {
 .rec-map { margin: 2px 0 0; display: flex; flex-direction: column; align-items: center; }
 .room-map { display: block; }
 .map-zoom { display: block; padding: 0; border: 0; background: none; cursor: zoom-in; }
+/* the map's two pages */
+.rec-tabs { display: flex; justify-content: center; gap: 14px; margin-top: -2px; }
+.rec-tab { padding: 0 2px; border: 0; background: none; font: 700 19px 'Caveat', cursive; color: rgba(58, 32, 16, 0.55); cursor: pointer; }
+.rec-tab.is-on { color: #3a2010; text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; }
+.run-legend { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; }
+.run-legend span { display: inline-flex; align-items: center; gap: 4px; }
+/* this week: a small sketch of each day's room, marked with what you did there */
+.week { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 4px; }
+.week-day { width: 100%; padding: 2px 0 4px; border: 0; background: none; display: flex; flex-direction: column; align-items: center; gap: 1px; font: 700 15px 'Caveat', cursive; color: #3a2010; cursor: pointer; border-radius: 4px; }
+.week-day.is-today { background: rgba(58, 32, 16, 0.1); }
+.week-name { line-height: 1; }
+.week-mark { display: inline-flex; align-items: center; gap: 3px; line-height: 1; }
+.map-full-title { margin: 0; font: 700 22px 'Caveat', cursive; color: var(--bone2); }
+/* the map over the game board */
+.map-btn { width: 30px; height: 30px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; place-items: center; }
+.map-btn img { image-rendering: pixelated; display: block; }
+.map-overlay { position: fixed; inset: 0; z-index: 55; display: flex; flex-direction: column; align-items: center; background: rgba(0, 0, 0, 0.88); padding: 8px 8px 14px; gap: 8px; }
+.map-overlay-stage { position: relative; flex: 1; min-height: 0; width: 100%; container-type: size; }
+
 .map-hint { font-size: 16px; line-height: 1; opacity: 0.7; margin-top: 2px; }
 /* the map, zoomed to fill the screen on a sheet of parchment */
 .map-full {

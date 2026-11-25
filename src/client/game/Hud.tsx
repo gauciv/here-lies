@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { SPEAKER_LEGEND, SPEAKER_OFF, SPEAKER_ON } from './icons';
 import { Candles } from './Candles';
 import { sound } from '../engine/sound';
+import scrollUrl from '../assets/ui/scroll.png';
 
 export const MuteButton = () => {
   const [muted, setMuted] = useState(sound.muted);
@@ -47,7 +48,7 @@ export const DayTier = ({ day, me }: { day: number; me: MeDto }) => {
   );
 };
 
-export const Hud = ({ me, day, onHelp, hidden = false }: { me: MeDto; day: number | null; onHelp: () => void; hidden?: boolean }) => (
+export const Hud = ({ me, day, onHelp, onMap, hidden = false }: { me: MeDto; day: number | null; onHelp: () => void; onMap: () => void; hidden?: boolean }) => (
   // hidden keeps its space, so the board doesn't jump while a cutscene plays
   <header className="hud" style={hidden ? { visibility: 'hidden' } : undefined}>
     <div className="hud-brand">
@@ -55,6 +56,9 @@ export const Hud = ({ me, day, onHelp, hidden = false }: { me: MeDto; day: numbe
     </div>
     <div className="hud-right">
       <div className="hud-row">
+        <button className="map-btn" aria-label="Open your map" onClick={onMap}>
+          <img src={scrollUrl} alt="" width={26} height={26} />
+        </button>
         <button className="help" aria-label="How to play" onClick={onHelp}>?</button>
         <MuteButton />
         <Candles lit={me.candles} />

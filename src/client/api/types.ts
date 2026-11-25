@@ -10,10 +10,12 @@ import type {
   SkipResponse,
   StartResponse,
   InitResponse,
+  PastDayResponse,
 } from '../../shared/api';
 
 export type GameApi = {
   init: () => Promise<InitResponse>;
+  pastDay: (day: number) => Promise<PastDayResponse>;
   fall: (day: number, path: Cell[]) => Promise<FallResponse>;
   cross: (day: number, path: Cell[]) => Promise<CrossResponse>;
   carve: (day: number, i: number, arrow: Direction) => Promise<CarveResponse>;

@@ -17,6 +17,7 @@ const call = async <T>(path: string, body?: unknown): Promise<T> => {
 
 export const httpApi: GameApi = {
   init: () => call('init'),
+  pastDay: (day) => call(`day/${day}`),
   fall: (day, path) => call('fall', { day, path }),
   cross: (day, path) => call('cross', { day, path }),
   carve: (day, i, arrow) => call('carve', { day, i, arrow }),

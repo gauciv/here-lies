@@ -1,12 +1,8 @@
-import { createPortal } from 'react-dom';
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
 import type { DayDto, MeDto } from '../../shared/api';
-import { loadApi } from '../api';
 import { CAMP_H, CAMP_W, CampScene, type CampCue } from '../engine/camp';
-import { DOOR_INK, FLAME, FLAME_LEGEND, INK_LEGEND, SKULL_INK } from './icons';
-import { PixelIcon } from './PixelIcon';
-import { MAP_H, MAP_W, RoomMap } from './RoomMap';
 import { isDayOver } from './reveal';
+import { MapScroll } from './MapScroll';
 
 export type StandbyHandle = {
   enter: (onDone: () => void, onCue?: (cue: CampCue) => void) => void;
@@ -64,85 +60,6 @@ const CampCanvas = forwardRef<StandbyHandle, { maxScale?: number; revival?: Revi
 });
 CampCanvas.displayName = 'CampCanvas';
 
-type Snapshot = { day: DayDto; graves: number[] };
-
-/**
- * The dwarf's map of today's room, on a scroll that unrolls when asked for:
- * the day, your streak, a rough sketch of the room, and how many have fallen
- * or crossed. It's read fresh every time it opens.
- */
-const Record = ({ day, me }: { day: DayDto | null; me: MeDto | null }) => {
-  const [snap, setSnap] = useState<Snapshot | null>(null);
-  useEffect(() => {
-    let alive = true;
-    void loadApi()
-      .then((api) => api.init())
-      .then((res) => { if (alive) setSnap({ day: res.day, graves: res.graves.filter((g) => g.top).map((g) => g.i) }); })
-      .catch(() => undefined);
-    return () => { alive = false; };
-  }, []);
-  const d = snap?.day ?? day;
-  const streak = me?.streak ?? 0;
-  const [zoomed, setZoomed] = useState(false);
-  return (
-    <>
-    {zoomed && d && snap && <MapFull day={d.day} graves={snap.graves} onClose={() => setZoomed(false)} />}
-    <section className="scroll" id="camp-map" aria-label="Your map of today's room">
-      <div className="scroll-sheet">
-        <div className="scroll-inner">
-          <header className="rec-head">
-            <p className="rec-day">{d ? `Day ${d.day}` : '…'}</p>
-            <p className={`rec-streak${streak ? '' : ' is-cold'}`} aria-label={`${streak} day streak`}>
-              <PixelIcon rows={FLAME} legend={FLAME_LEGEND} size={2} />
-              <span>{streak}</span>
-            </p>
-          </header>
-          <figure className="rec-map">
-            {d && snap ? (
-              <button className="map-zoom" aria-label="Open the map full screen" onClick={() => setZoomed(true)}>
-                <RoomMap day={d.day} graves={snap.graves} />
-              </button>
-            ) : <div className="room-map room-map-wait" />}
-            {snap && <figcaption className="map-hint">Tap the map to look closer</figcaption>}
-          </figure>
-          {d && (
-            <footer className="rec-foot">
-              <span><PixelIcon rows={SKULL_INK} legend={INK_LEGEND} size={2} /> {d.fallen} fell</span>
-              <span><PixelIcon rows={DOOR_INK} legend={INK_LEGEND} size={2} /> {d.crossed} crossed</span>
-            </footer>
-          )}
-        </div>
-      </div>
-    </section>
-    </>
-  );
-};
-
-/** The map, zoomed in to fill the screen. Tap anywhere to put it away. */
-const MapFull = ({ day, graves, onClose }: { day: number; graves: readonly number[]; onClose: () => void }) => {
-  const [zoom, setZoom] = useState(() => fitZoom());
-  useEffect(() => {
-    const onResize = () => setZoom(fitZoom());
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('resize', onResize);
-    window.addEventListener('keydown', onKey);
-    return () => { window.removeEventListener('resize', onResize); window.removeEventListener('keydown', onKey); };
-  }, [onClose]);
-  // portalled to the page root: the camp's layout containment would trap a fixed layer
-  return createPortal(
-    <div className="map-full" role="dialog" aria-modal="true" aria-label="Map of today's room" onClick={onClose}>
-      <div className="map-full-sheet">
-        <RoomMap day={day} graves={graves} zoom={zoom} />
-      </div>
-      <button className="btn map-full-close" onClick={onClose}>Close map</button>
-    </div>,
-    document.body,
-  );
-};
-
-/** As large as the screen allows, leaving room for the sheet's edges and the close button. */
-const fitZoom = (): number => Math.max(1, Math.min((window.innerWidth - 56) / MAP_W, (window.innerHeight - 150) / MAP_H));
-
 /**
  * The standby screen: the title, a dwarf by a fire in the dark, and one way on.
  * Your record stays folded away until you ask for it.
@@ -182,7 +99,7 @@ export const Standby = forwardRef<StandbyHandle, {
       </header>
       <div className="camp-middle">
         <CampCanvas ref={canvasRef} maxScale={compact ? 3 : 4} revival={revivalOnce} victory={victory} />
-        {open && <Record day={day} me={me} />}
+        {open && <MapScroll day={day} me={me} id="camp-map" />}
       </div>
       <div className="camp-actions">
         {finished ? (

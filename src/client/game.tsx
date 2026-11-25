@@ -6,6 +6,7 @@ import { CarveCard, FellAgainCard, GameOverCard, GraveCard, IntroCard, SpentCard
 import { Hud, MuteButton } from './game/Hud';
 import { Standby, type StandbyHandle } from './game/Standby';
 import { isDayOver, verdictFor } from './game/reveal';
+import { MapOverlay } from './game/MapScroll';
 import { sound } from './engine/sound';
 import { Stage } from './game/Stage';
 import { cellOf } from '../shared/board';
@@ -34,6 +35,7 @@ export const App = () => {
   const [reviving, setReviving] = useState<'soul' | 'return' | null>(null);
   // reaching the door: the dwarf walks out through it, celebrates in the dark camp, then walks home
   const [victoryView, setVictoryView] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const [continuing, setContinuing] = useState(false);
   // game over → 'Back to camp': the soul first floats off the board to the stairs
   const [soulLeaving, setSoulLeaving] = useState(false);
@@ -152,7 +154,7 @@ export const App = () => {
 
   return (
     <main className="app">
-      {s.me ? <Hud me={s.me} day={s.day?.day ?? null} onHelp={openHelp} hidden={soulLeaving || exiting} /> : <header className="hud" />}
+      {s.me ? <Hud me={s.me} day={s.day?.day ?? null} onHelp={openHelp} onMap={() => setMapOpen(true)} hidden={soulLeaving || exiting} /> : <header className="hud" />}
       <Stage
         scene={scene} onTap={tap} onFallDone={onFallDone} onCrossDone={onCrossDone}
         onExitDone={() => {
@@ -187,6 +189,7 @@ export const App = () => {
         )}
         {s.toast && <div className="toast" role="status">{s.toast}</div>}
       </Stage>
+      {mapOpen && <MapOverlay day={s.day} me={s.me} onClose={() => setMapOpen(false)} />}
       <footer className="hint" aria-live="polite">
         <span>{s.status === 'loading' ? 'Lighting the torch…' : hint}</span>
         {(s.phase === 'crossed' || s.phase === 'idle') && s.card.kind === 'none' && s.me && (

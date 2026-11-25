@@ -63,6 +63,7 @@ const wait = <T>(p: Promise<T>): Promise<T> => ready.then(() => new Promise((res
 
 export const localApi: GameApi = {
   init: () => wait(Promise.resolve()).then(() => engine.init(day, ME, 't3_local')),
+  pastDay: (d) => wait(Promise.resolve()).then(() => engine.pastDay(d, ME)),
   fall: (d, path) => wait(Promise.resolve()).then(() => engine.fall(d, ME, path)),
   cross: (d, path) => wait(Promise.resolve()).then(() => engine.cross(d, ME, path)),
   carve: (d, i, arrow) => wait(Promise.resolve()).then(() => engine.carve(d, ME, i, arrow)),

@@ -1,5 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { COLS, ROWS, generateBoard, idx, isOpen } from '../../shared/board';
+import { DIRECTIONS, arrowIsTrue } from '../../shared/epitaphs';
+import type { GraveDto } from '../../shared/api';
+import { RUN_DASHES } from './runStyles';
 
 const CELL = 30;
 const PAD = 12;
@@ -10,6 +13,7 @@ const W = MAP_W;
 const H = MAP_H;
 const INK = 'rgba(58, 32, 16, 0.88)';
 const RED = '#a3271a';
+const GOLD = '#b0791a';
 
 const hash = (a: number, b: number): number => {
   let h = Math.imul(a + 0x9e37, 374761393) ^ Math.imul(b + 0x85eb, 668265263);
@@ -17,19 +21,22 @@ const hash = (a: number, b: number): number => {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 };
 
-/** About one grave in seven makes it onto the map (at least one), the same ones every opening. */
-const mappedGraves = (day: number, graves: readonly number[]): number[] => {
-  if (!graves.length) return [];
-  const keep = Math.max(1, Math.ceil(graves.length / 7));
-  return [...graves].sort((a, b) => hash(day, a) - hash(day, b)).slice(0, keep);
-};
-
 /**
- * A rough ink sketch of today's room, as a dwarf might scrawl it: the walls and
- * the rock, a red X where the door is, a few skulls where others died, and
- * "you" at the stairs. No grid, no numbers, no arrows, no paths.
+ * A rough ink sketch of the room, as a dwarf might scrawl it: the walls and the
+ * rock, a red X where the door is, "you" at the entrance, your own runs as inked
+ * trails (one line style each) and a skull wherever you died. For a finished
+ * day it can also show the full answer: every pit and every arrow's verdict.
  */
-export const RoomMap = ({ day, graves, zoom = 1 }: { day: number; graves: readonly number[]; zoom?: number }) => {
+export const RoomMap = ({ day, runs = [], deaths = [], answer = null, zoom = 1 }: {
+  day: number;
+  /** the player's own runs, stone indices from the entrance */
+  runs?: readonly (readonly number[])[];
+  /** pits the player fell into */
+  deaths?: readonly number[];
+  /** a finished day's full answer: its slabs (every pit is drawn too) */
+  answer?: readonly GraveDto[] | null;
+  zoom?: number;
+}) => {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -90,12 +97,44 @@ export const RoomMap = ({ day, graves, zoom = 1 }: { day: number; graves: readon
       ctx.beginPath();
       ctx.arc(sx + CELL / 2, Y(ROWS - 1) + CELL / 2, 2.2, 0, Math.PI * 2);
       ctx.fill();
-      ctx.font = '700 15px Caveat, cursive';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('you', sx + CELL + 3, Y(ROWS - 1) + CELL / 2 + 1);
-      // skulls where some have died
-      for (const g of mappedGraves(day, graves)) {
-        const cx = X(g % COLS) + CELL / 2, cy = Y(Math.floor(g / COLS)) + CELL / 2;
+      if (zoom >= 0.6) {
+        ctx.font = '700 15px Caveat, cursive';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('you', sx + CELL + 3, Y(ROWS - 1) + CELL / 2 + 1);
+      }
+      const mid = (i: number) => ({ x: X(i % COLS) + CELL / 2, y: Y(Math.floor(i / COLS)) + CELL / 2 });
+      // a finished day's answer: every pit inked as a hole
+      if (answer) {
+        board.pits.forEach((isPit, i) => {
+          if (!isPit) return;
+          const { x, y } = mid(i);
+          ctx.fillStyle = 'rgba(58, 32, 16, 0.55)';
+          ctx.beginPath();
+          ctx.ellipse(x, y + 1, 7.5, 5.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+      // your runs, each in its own line, from the entrance to wherever it ended
+      runs.forEach((run, k) => {
+        ctx.save();
+        ctx.setLineDash([...(RUN_DASHES[k % RUN_DASHES.length] ?? [])]);
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 1.7;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        run.forEach((i, n) => {
+          const { x, y } = mid(i);
+          const wx = x + (hash(k * 97 + n, day) - 0.5) * 5, wy = y + (hash(n, k * 53 + day) - 0.5) * 5;
+          if (n === 0) ctx.moveTo(x, Y(ROWS) + 2); // from the entrance steps
+          ctx.lineTo(wx, wy);
+        });
+        ctx.stroke();
+        ctx.restore();
+      });
+      // a skull wherever you died
+      for (const g of new Set(deaths)) {
+        const { x: cx, y: cy } = mid(g);
         ctx.strokeStyle = INK;
         ctx.lineWidth = 1.3;
         ctx.beginPath();
@@ -108,6 +147,21 @@ export const RoomMap = ({ day, graves, zoom = 1 }: { day: number; graves: readon
         stroke(cx - 0.8, cy + 2.6, cx - 0.8, cy + 4.6, 0.8);
         stroke(cx + 0.8, cy + 2.6, cx + 0.8, cy + 4.6, 0.8);
       }
+      // a finished day's arrows, gold for the truth and red for a lie
+      if (answer) {
+        for (const g of answer) {
+          if (!g.top) continue;
+          const { x, y } = mid(g.i);
+          const v = DIRECTIONS[g.top.arrow] ?? DIRECTIONS[0]!;
+          const len = Math.hypot(v.dc, v.dr);
+          const ux = v.dc / len, uy = v.dr / len;
+          const col = arrowIsTrue(board, g.i, g.top.arrow) ? GOLD : RED;
+          const tx = x + ux * 9, ty = y + uy * 9;
+          stroke(x - ux * 7, y - uy * 7, tx, ty, 2, col);
+          stroke(tx, ty, tx - ux * 5 - uy * 4, ty - uy * 5 + ux * 4, 2, col);
+          stroke(tx, ty, tx - ux * 5 + uy * 4, ty - uy * 5 - ux * 4, 2, col);
+        }
+      }
       // X marks the door
       const dx = X(board.door.c) + CELL / 2, dy = Y(0);
       stroke(dx - 6, dy - 6, dx + 6, dy + 6, 2.6, RED);
@@ -119,7 +173,7 @@ export const RoomMap = ({ day, graves, zoom = 1 }: { day: number; graves: readon
     draw();
     void document.fonts?.load('700 15px Caveat').then(() => { if (alive) { seed = day * 31; draw(); } });
     return () => { alive = false; };
-  }, [day, graves, zoom]);
+  }, [day, runs, deaths, answer, zoom]);
 
   return (
     <canvas
@@ -127,7 +181,9 @@ export const RoomMap = ({ day, graves, zoom = 1 }: { day: number; graves: readon
       className="room-map"
       style={{ width: Math.round(W * zoom), height: Math.round(H * zoom) }}
       role="img"
-      aria-label="A rough map of today's room: the walls, a red X where the door is, a few skulls where others died, and you at the stairs."
+      aria-label={answer
+        ? 'The finished room revealed: every pit, and every arrow marked gold for the truth or red for a lie.'
+        : 'A rough map of the room: the walls, a red X where the door is, your runs as inked trails and a skull where you died.'}
     />
   );
 };
