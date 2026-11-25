@@ -50,6 +50,8 @@ export type SceneState = {
   soulLeaving: boolean;
   /** 'Continue' after crossing: the dwarf walks out through the door */
   exiting: boolean;
+  /** tutorial: a bouncing arrow over the stone to tap next */
+  hint?: Cell | null;
 };
 
 /** How far the torch reaches, in tiles (centre to centre). Drawing and tapping share it. */
@@ -580,14 +582,6 @@ export class Scene {
     ctx.translate(sx, sy);
 
     // ── emissive layer ──
-    // a faint warmth spills down the steps from the camp fire above
-    {
-      const ex = START_CELL.c * TILE, ey = TOP + ROWS * TILE;
-      for (let k = 0; k < 8; k++) {
-        ctx.fillStyle = `rgba(255, 150, 60, ${(0.05 + 0.025 * k).toFixed(3)})`;
-        ctx.fillRect(ex + 1, ey + 8 + k, TILE - 2, 1);
-      }
-    }
     const blink = (seed: number, rate: number) => hash2(Math.floor(t * rate), Math.floor(seed * 1000));
 
     // once the dark lifts, slabs pulse gently so it's clear they can be read
@@ -617,6 +611,21 @@ export class Scene {
         this.px(ctx, col, X + 1, Y + e, 2, 1); this.px(ctx, col, X + 1, Y + e - 1, 1, 2);
         this.px(ctx, col, X + e - 1, Y + e, 2, 1); this.px(ctx, col, X + e, Y + e - 1, 1, 2);
       }
+    }
+
+    // tutorial: a bright frame around the stone to tap next, with a bouncing arrow inside it
+    if (s.hint) {
+      const X = s.hint.c * TILE, Y = TOP + s.hint.r * TILE;
+      const on = this.reduced || Math.sin(t * 6) > -0.3;
+      if (on) {
+        this.px(ctx, 'warm6', X, Y, TILE, 1); this.px(ctx, 'warm6', X, Y + TILE - 1, TILE, 1);
+        this.px(ctx, 'warm6', X, Y, 1, TILE); this.px(ctx, 'warm6', X + TILE - 1, Y, 1, TILE);
+      }
+      const bob = this.reduced ? 0 : Math.round(Math.abs(Math.sin(t * 4)) * 2);
+      const ax = X + 8, ay = Y + 4 + bob;
+      const rows = ['..#..', '..#..', '#####', '.###.', '..#..'];
+      rows.forEach((row, ry) => [...row].forEach((ch, rx) => { if (ch === '#') { this.px(ctx, 'ink', ax - 2 + rx + 1, ay + ry + 1); } }));
+      rows.forEach((row, ry) => [...row].forEach((ch, rx) => { if (ch === '#') this.px(ctx, 'warm5', ax - 2 + rx, ay + ry); }));
     }
 
     // torch: handle, flame, sparks, dust

@@ -7,6 +7,10 @@ import { Hud, MuteButton } from './game/Hud';
 import { Standby, type StandbyHandle } from './game/Standby';
 import { isDayOver, verdictFor } from './game/reveal';
 import { MapOverlay } from './game/MapScroll';
+import { GearButton, Settings } from './game/Settings';
+import { Comic } from './onboarding/Comic';
+import { Tutorial } from './onboarding/Tutorial';
+import { isOnboarded, markOnboarded } from './onboarding/progress';
 import { sound } from './engine/sound';
 import { Stage } from './game/Stage';
 import { cellOf } from '../shared/board';
@@ -93,13 +97,30 @@ export const App = () => {
     }, 420);
   }, []);
 
-  const enter = useCallback(() => {
+  const runEnter = useCallback(() => {
     if (entering) return;
     setEntering(true);
     void startRun();
     if (standby.current) standby.current.enter(() => crossFade('board'), (cue) => sound.play(cue));
     else { sound.play('door'); crossFade('board'); }
   }, [entering, crossFade, startRun]);
+
+  // first time in: the comic, then the practice room, then the real dungeon
+  const [onboarding, setOnboarding] = useState<{ queue: readonly ('comic' | 'tutorial')[]; thenEnter: boolean } | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const enter = useCallback(() => {
+    if (entering) return;
+    if (!isOnboarded()) { setOnboarding({ queue: ['comic', 'tutorial'], thenEnter: true }); return; }
+    runEnter();
+  }, [entering, runEnter]);
+  const onboardingStep = () => {
+    if (!onboarding) return;
+    const rest = onboarding.queue.slice(1);
+    if (rest.length) { setOnboarding({ ...onboarding, queue: rest }); return; }
+    if (onboarding.queue[0] === 'tutorial') { markOnboarded(); startPlaying(); }
+    setOnboarding(null);
+    if (onboarding.thenEnter) runEnter();
+  };
 
   useEffect(() => {
     if (s.status === 'ready' && autoEnter.current) {
@@ -125,7 +146,18 @@ export const App = () => {
   if (view === 'camp') {
     return (
       <main className="app" onPointerDown={() => sound.setMode('camp')}>
-        {reviving === null && !victoryView && <div className="camp-corner"><MuteButton /></div>}
+        {reviving === null && !victoryView && (
+          <div className="camp-corner"><GearButton onClick={() => setSettingsOpen(true)} /><MuteButton /></div>
+        )}
+        {settingsOpen && (
+          <Settings
+            onClose={() => setSettingsOpen(false)}
+            onIntro={() => { setSettingsOpen(false); setOnboarding({ queue: ['comic'], thenEnter: false }); }}
+            onTutorial={() => { setSettingsOpen(false); setOnboarding({ queue: ['tutorial'], thenEnter: false }); }}
+          />
+        )}
+        {onboarding?.queue[0] === 'comic' && <Comic onDone={onboardingStep} />}
+        {onboarding?.queue[0] === 'tutorial' && <Tutorial onDone={onboardingStep} />}
         <Standby
           ref={standby} day={s.day} me={s.me} busy={entering || s.status !== 'ready'} onEnter={enter} onReview={() => crossFade('board')}
           revival={reviving ? { kind: reviving, onDone: () => setReviving(null), onCue: (cue) => sound.play(cue) } : undefined}

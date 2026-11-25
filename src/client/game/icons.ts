@@ -52,3 +52,17 @@ export const FLAME_LEGEND: Record<string, ColorKey> = { o: 'red1', y: 'warm4', W
 export const SKULL_INK = ['.kkkkk.', 'kkkkkkk', 'k..k..k', 'kkkkkkk', '.kk.kk.', '.k.k.k.'] as const;
 export const DOOR_INK = ['..kkk..', '.k...k.', 'k.....k', 'k.....k', 'k...k.k', 'k.....k', 'kkkkkkk'] as const;
 export const INK_LEGEND: Record<string, ColorKey> = { k: 'warm0' };
+
+// ── settings gear (9x9) ──
+export const GEAR = [
+  '...k.k...',
+  '.k.kkk.k.',
+  '..kkkkk..',
+  'kkkk.kkkk',
+  '.kk...kk.',
+  'kkkk.kkkk',
+  '..kkkkk..',
+  '.k.kkk.k.',
+  '...k.k...',
+] as const;
+export const GEAR_LEGEND: Record<string, ColorKey> = { k: 'bone2' };
