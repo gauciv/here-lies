@@ -4,6 +4,18 @@
 type Cue = 'step' | 'fall' | 'carve' | 'vote' | 'deny' | 'crumble' | 'revive' | 'snuff' | 'victory' | 'door' | 'ignite';
 
 const MUTE_KEY = 'herelies:muted';
+const VOLUME_KEY = { music: 'herelies:vol-music', sfx: 'herelies:vol-sfx' } as const;
+export type Channel = keyof typeof VOLUME_KEY;
+const BASE = 0.55;
+
+const readVolume = (ch: Channel): number => {
+  try {
+    const v = Number(window.localStorage.getItem(VOLUME_KEY[ch]));
+    return window.localStorage.getItem(VOLUME_KEY[ch]) !== null && Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 1;
+  } catch {
+    return 1;
+  }
+};
 
 const readMuted = (): boolean => {
   try {
@@ -15,7 +27,11 @@ const readMuted = (): boolean => {
 
 class Sound {
   private ctx: AudioContext | null = null;
+  /** sound effects go here */
   private master: GainNode | null = null;
+  /** both soundtracks go here, so music and effects have their own volume */
+  private music: GainNode | null = null;
+  private volumes: Record<Channel, number> = { music: readVolume('music'), sfx: readVolume('sfx') };
   private noise: AudioBuffer | null = null;
   private ambience: { stop: () => void } | null = null;
   muted = readMuted();
@@ -29,8 +45,11 @@ class Sound {
         return null;
       }
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.55;
+      this.master.gain.value = BASE * this.volumes.sfx;
       this.master.connect(this.ctx.destination);
+      this.music = this.ctx.createGain();
+      this.music.gain.value = BASE * this.volumes.music;
+      this.music.connect(this.ctx.destination);
       const len = this.ctx.sampleRate;
       this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
       const data = this.noise.getChannelData(0);
@@ -38,6 +57,23 @@ class Sound {
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume();
     return this.ctx;
+  }
+
+  volume(ch: Channel): number {
+    return this.volumes[ch];
+  }
+
+  /** 0..1, remembered on this device */
+  setVolume(ch: Channel, v: number): void {
+    const vol = Math.max(0, Math.min(1, v));
+    this.volumes[ch] = vol;
+    try {
+      window.localStorage.setItem(VOLUME_KEY[ch], String(vol));
+    } catch {
+      /* per-viewer preference only */
+    }
+    const node = ch === 'music' ? this.music : this.master;
+    if (node && this.ctx) node.gain.setTargetAtTime(BASE * vol, this.ctx.currentTime, 0.05);
   }
 
   setMuted(m: boolean): void {
@@ -278,7 +314,7 @@ class Sound {
     const timers: number[] = [];
     const nodes: AudioScheduledSourceNode[] = [];
     let stopped = false;
-    const { bus, echo } = this.musicBus(ctx, this.master);
+    const { bus, echo } = this.musicBus(ctx, this.music ?? this.master);
     const every = (minMs: number, maxMs: number, fn: () => void) => {
       const next = () => {
         if (stopped) return;
