@@ -128,6 +128,7 @@ export const useGame = () => {
   }, []);
 
   const openGrave = useCallback((i: number) => {
+    sound.play('slab');
     setS((p) => ({ ...p, card: { kind: 'grave', i } }));
   }, []);
 

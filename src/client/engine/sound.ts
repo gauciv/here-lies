@@ -1,12 +1,12 @@
 // All sound is synthesised with WebAudio: no files, nothing to license, tiny.
 // Audio only starts after the player's first tap (browser autoplay rules).
 
-type Cue = 'step' | 'fall' | 'carve' | 'vote' | 'deny' | 'crumble' | 'revive' | 'snuff' | 'victory' | 'door' | 'ignite';
+type Cue = 'step' | 'fall' | 'carve' | 'vote' | 'deny' | 'crumble' | 'revive' | 'snuff' | 'victory' | 'door' | 'ignite' | 'ui' | 'page' | 'pop' | 'slab';
 
 const MUTE_KEY = 'herelies:muted';
 const VOLUME_KEY = { music: 'herelies:vol-music', sfx: 'herelies:vol-sfx' } as const;
 export type Channel = keyof typeof VOLUME_KEY;
-const BASE = 0.55;
+const BASE = 0.85;
 
 const readVolume = (ch: Channel): number => {
   try {
@@ -44,12 +44,20 @@ class Sound {
       } catch {
         return null;
       }
+      // a gentle limiter on the way out: everything can be loud enough for a phone speaker without clipping
+      const limiter = this.ctx.createDynamicsCompressor();
+      limiter.threshold.value = -12;
+      limiter.knee.value = 8;
+      limiter.ratio.value = 10;
+      limiter.attack.value = 0.004;
+      limiter.release.value = 0.2;
+      limiter.connect(this.ctx.destination);
       this.master = this.ctx.createGain();
       this.master.gain.value = BASE * this.volumes.sfx;
-      this.master.connect(this.ctx.destination);
+      this.master.connect(limiter);
       this.music = this.ctx.createGain();
       this.music.gain.value = BASE * this.volumes.music;
-      this.music.connect(this.ctx.destination);
+      this.music.connect(limiter);
       const len = this.ctx.sampleRate;
       this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
       const data = this.noise.getChannelData(0);
@@ -176,9 +184,42 @@ class Sound {
     if (!ctx) return;
     const t = ctx.currentTime + 0.01;
     switch (cue) {
-      case 'step': // boot on stone
-        this.burst(t, 0.09, 420 + Math.random() * 120, 0.8, 0.55);
-        this.tone(t, 0.07, 95, 0.12, 'sine', 70);
+      case 'step': { // a boot on stone: a gritty scuff and a hollow tok, never quite the same twice
+        const v = 0.85 + Math.random() * 0.3;
+        this.burst(t, 0.06, 1100 * v, 1.2, 0.5, 'bandpass');
+        this.burst(t + 0.01, 0.1, 380 * v, 0.9, 0.35);
+        this.tone(t, 0.09, 240 * v, 0.16, 'triangle', 150 * v);
+        break;
+      }
+      case 'ui': // a button pressed: a small stone tick
+        this.burst(t, 0.025, 3000, 2, 0.12, 'bandpass');
+        this.tone(t, 0.06, 880, 0.06, 'triangle', 640);
+        break;
+      case 'pop': // a comic panel appears
+        this.tone(t, 0.09, 520, 0.07, 'triangle', 800);
+        this.burst(t, 0.05, 2400, 1.5, 0.08, 'bandpass');
+        break;
+      case 'page': { // paper: a page turning
+        const ctxP = this.ctx;
+        if (!ctxP || !this.master || !this.noise) break;
+        const src = ctxP.createBufferSource();
+        src.buffer = this.noise;
+        const f = ctxP.createBiquadFilter();
+        f.type = 'bandpass';
+        f.Q.value = 0.9;
+        f.frequency.setValueAtTime(700, t);
+        f.frequency.exponentialRampToValueAtTime(3200, t + 0.28);
+        const g = ctxP.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.22, t + 0.08);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
+        src.connect(f).connect(g).connect(this.master);
+        src.start(t, Math.random() * 0.5, 0.4);
+        break;
+      }
+      case 'slab': // reading a slab: stone grinds on stone
+        this.burst(t, 0.22, 650, 1.4, 0.3, 'bandpass');
+        this.tone(t, 0.2, 170, 0.08, 'triangle', 120);
         break;
       case 'fall': // stone cracks, gives way, long drop, distant thud
         this.burst(t, 0.12, 2400, 1.2, 0.35, 'bandpass');
@@ -344,19 +385,20 @@ class Sound {
       // drone: D with a grinding E-flat a minor second above, low and filtered
       const drone = ctx.createGain();
       drone.gain.setValueAtTime(0.0001, ctx.currentTime);
-      drone.gain.exponentialRampToValueAtTime(0.05, ctx.currentTime + 5);
+      drone.gain.exponentialRampToValueAtTime(0.06, ctx.currentTime + 5);
       const lp = ctx.createBiquadFilter();
       lp.type = 'lowpass';
-      lp.frequency.value = 240;
+      lp.frequency.value = 700;
       drone.connect(lp).connect(bus);
-      osc('sawtooth', 73.42, 0.5, drone);
-      osc('sawtooth', 77.78, 0.32, drone);
-      osc('sine', 36.71, 0.8, drone);
+      // pitched where a phone speaker can actually play it
+      osc('sawtooth', 146.83, 0.5, drone);
+      osc('sawtooth', 155.56, 0.28, drone);
+      osc('triangle', 220.0, 0.35, drone);
       // a slow wobble on the filter keeps the drone uneasy
       const wob = ctx.createOscillator();
       wob.frequency.value = 0.09;
       const wobG = ctx.createGain();
-      wobG.gain.value = 60;
+      wobG.gain.value = 220;
       wob.connect(wobG).connect(lp.frequency);
       wob.start();
       nodes.push(wob);
@@ -364,17 +406,32 @@ class Sound {
       every(1500, 1700, () => {
         if (performance.now() < this.quietUntil || !this.ctx) return;
         const at = this.ctx.currentTime + 0.02;
-        this.tone(at, 0.16, 58, 0.16, 'sine', 40);
-        this.tone(at + 0.2, 0.14, 52, 0.11, 'sine', 38);
+        // a low thud with enough overtones to be heard on small speakers
+        this.tone(at, 0.16, 116, 0.14, 'triangle', 80);
+        this.tone(at + 0.2, 0.14, 104, 0.1, 'triangle', 76);
       });
+      // the theme: a slow music-box line in D minor, echoing in the dark
+      const phrases = [
+        [587.33, 698.46, 880.0, 783.99, 698.46, 659.25, 587.33, 0],
+        [587.33, 523.25, 466.16, 440.0, 466.16, 523.25, 440.0, 0],
+        [698.46, 659.25, 587.33, 554.37, 587.33, 0, 440.0, 0],
+      ];
+      let phrase = 0;
+      const playPhrase = () => {
+        if (!this.ctx || performance.now() < this.quietUntil) return;
+        const at = this.ctx.currentTime + 0.05;
+        (phrases[phrase++ % phrases.length] ?? []).forEach((hz, k) => { if (hz) this.bell(bus, echo, at + k * 0.62, hz, 0.075); });
+      };
+      timers.push(window.setTimeout(playPhrase, 2500));
+      every(9500, 9500, playPhrase);
       // eerie bells: tritones, slightly detuned, far apart
       const eerie = [146.83, 207.65, 155.56, 220.0, 293.66, 415.3];
       every(6000, 12000, () => {
         if (performance.now() < this.quietUntil || !this.ctx) return;
         const at = this.ctx.currentTime + 0.05;
         const k = Math.floor(Math.random() * (eerie.length - 1));
-        this.bell(bus, echo, at, eerie[k]! * 1.004, 0.035);
-        this.bell(bus, echo, at + 0.6, eerie[k + 1]! * 0.997, 0.028);
+        this.bell(bus, echo, at, eerie[k]! * 2.008, 0.05);
+        this.bell(bus, echo, at + 0.6, eerie[k + 1]! * 1.994, 0.04);
       });
       // a distant metallic scrape now and then
       every(14000, 26000, () => {
@@ -412,7 +469,7 @@ class Sound {
         o.start(at);
         o.stop(at + 0.15);
       });
-      crackle = fireCrackle(220, 0.045);
+      crackle = fireCrackle(200, 0.08); // the torch
     } else {
       // camp: warm pads drifting between Dmaj7 and Gmaj7, gentle plucks, a cosy fire
       const chords = [[146.83, 185.0, 220.0, 277.18], [98.0, 123.47, 146.83, 185.0]];
@@ -425,7 +482,7 @@ class Sound {
           o.frequency.value = hz;
           const g = this.ctx.createGain();
           g.gain.setValueAtTime(0.0001, at);
-          g.gain.exponentialRampToValueAtTime(0.022, at + 2.2);
+          g.gain.exponentialRampToValueAtTime(0.045, at + 2.2);
           g.gain.exponentialRampToValueAtTime(0.0001, at + 8.5);
           o.connect(g).connect(bus);
           o.start(at);
@@ -433,19 +490,23 @@ class Sound {
         }
       };
       pad(ctx.currentTime + 0.1, chords[0]!);
+      // each chord, a slow plucked arpeggio an octave up, like a lute by the fire
+      const pluck = (at: number, notes: number[]) => notes.forEach((hz, k) => this.bell(bus, echo, at + k * 0.42, hz * 2, 0.05));
+      pluck(ctx.currentTime + 0.6, chords[0]!);
       every(7000, 7000, () => {
         if (!this.ctx) return;
         which = 1 - which;
         pad(this.ctx.currentTime + 0.05, chords[which]!);
+        pluck(this.ctx.currentTime + 0.6, chords[which]!);
       });
       const pent = [293.66, 329.63, 369.99, 440.0, 493.88, 587.33];
       let note = 2;
       every(2600, 5200, () => {
         if (!this.ctx) return;
         note = Math.max(0, Math.min(pent.length - 1, note + [-1, -1, 1, 1, 2, -2][Math.floor(Math.random() * 6)]!));
-        this.bell(bus, echo, this.ctx.currentTime + 0.05, pent[note]!, 0.03);
+        this.bell(bus, echo, this.ctx.currentTime + 0.05, pent[note]!, 0.05);
       });
-      crackle = fireCrackle(140, 0.07);
+      crackle = fireCrackle(120, 0.13); // the campfire
     }
 
     this.ambience = {

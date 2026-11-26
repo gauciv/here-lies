@@ -53,9 +53,9 @@ export const Comic = ({ onDone }: { onDone: () => void }) => {
   const last = pageDone && page === PAGES.length - 1;
   const next = () => {
     if (turning) return;
-    sound.play(last ? 'door' : 'step');
-    if (last) { onDone(); return; }
-    if (!pageDone) { setShown((n) => n + 1); return; }
+    if (last) { sound.play('door'); onDone(); return; }
+    if (!pageDone) { sound.play('pop'); setShown((n) => n + 1); return; }
+    sound.play('page');
     // turn the page
     setTurning(true);
     window.setTimeout(() => { setPage((p) => p + 1); setShown(1); setTurning(false); }, 260);

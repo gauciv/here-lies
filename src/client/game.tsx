@@ -50,6 +50,15 @@ export const App = () => {
   // through the door the moment the run is won (or when 'Your result' is reopened later)
   const exiting = view === 'board' && s.phase === 'crossed' && s.card.kind === 'crossed';
 
+  // every button answers with a small stone tick
+  useEffect(() => {
+    const tick = (e: MouseEvent) => {
+      if (e.target instanceof Element && e.target.closest('button:not(:disabled)')) sound.play('ui');
+    };
+    document.addEventListener('click', tick, true);
+    return () => document.removeEventListener('click', tick, true);
+  }, []);
+
   // re-read every render: a post left open overnight unlocks the full reveal at the reset
   const dayOver = s.board ? isDayOver(s.board.day) : false;
   const scene = useMemo<SceneState | null>(() => {
