@@ -1,26 +1,10 @@
 import type { MeDto } from '../../shared/api';
 import { difficultyOf } from '../../shared/board';
 import { formatTime } from '../../shared/pioneer';
-import { PixelIcon } from './PixelIcon';
 import { useEffect, useState } from 'react';
-import { SPEAKER_LEGEND, SPEAKER_OFF, SPEAKER_ON } from './icons';
+import { GearButton } from './Settings';
 import { Candles } from './Candles';
-import { sound } from '../engine/sound';
 import scrollUrl from '../assets/ui/scroll.png';
-
-export const MuteButton = () => {
-  const [muted, setMuted] = useState(sound.muted);
-  return (
-    <button
-      className="mute"
-      aria-label={muted ? 'Turn sound on' : 'Turn sound off'}
-      aria-pressed={muted}
-      onClick={() => { sound.setMuted(!muted); setMuted(!muted); }}
-    >
-      <PixelIcon rows={muted ? SPEAKER_OFF : SPEAKER_ON} legend={SPEAKER_LEGEND} size={2} />
-    </button>
-  );
-};
 
 /** Today's clock: running while you walk, stopped once you cross or your last candle goes out. */
 const useRunTime = (me: MeDto): number => {
@@ -48,7 +32,7 @@ export const DayTier = ({ day, me }: { day: number; me: MeDto }) => {
   );
 };
 
-export const Hud = ({ me, day, onHelp, onMap, hidden = false }: { me: MeDto; day: number | null; onHelp: () => void; onMap: () => void; hidden?: boolean }) => (
+export const Hud = ({ me, day, onHelp, onMap, onSettings, hidden = false }: { me: MeDto; day: number | null; onHelp: () => void; onMap: () => void; onSettings: () => void; hidden?: boolean }) => (
   // hidden keeps its space, so the board doesn't jump while a cutscene plays
   <header className="hud" style={hidden ? { visibility: 'hidden' } : undefined}>
     <div className="hud-brand">
@@ -60,7 +44,7 @@ export const Hud = ({ me, day, onHelp, onMap, hidden = false }: { me: MeDto; day
           <img src={scrollUrl} alt="" width={26} height={26} />
         </button>
         <button className="help" aria-label="How to play" onClick={onHelp}>?</button>
-        <MuteButton />
+        <GearButton onClick={onSettings} />
         <Candles lit={me.candles} />
       </div>
     </div>

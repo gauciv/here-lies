@@ -233,7 +233,6 @@ export const useGame = () => {
     try {
       const res = await pendingCross.current;
       if (!res) return;
-      sound.play('victory');
       setS((p) => ({ ...p, me: res.me, day: res.day, graves: allGraves(res.graves), phase: 'crossed', card: { kind: 'crossed' } }));
     } catch (e) {
       toast(e instanceof Error ? e.message : 'The gate would not open.');

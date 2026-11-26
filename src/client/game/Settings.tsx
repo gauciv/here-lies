@@ -23,16 +23,19 @@ const Volume = ({ ch, label }: { ch: Channel; label: string }) => {
 };
 
 /** Music and sound-effect volumes, and a way to see the intro or the tutorial again. */
-export const Settings = ({ onClose, onIntro, onTutorial }: { onClose: () => void; onIntro: () => void; onTutorial: () => void }) => (
+export const Settings = ({ onClose, onIntro, onTutorial }: { onClose: () => void; onIntro?: () => void; onTutorial?: () => void }) => (
   <div className="settings" role="dialog" aria-modal="true" aria-label="Settings" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
     <section className="card settings-card">
       <p className="epitaph">Settings</p>
       <Volume ch="music" label="Music" />
       <Volume ch="sfx" label="Sound effects" />
-      <div className="settings-actions">
-        <button className="btn" onClick={onIntro}>Replay the intro</button>
-        <button className="btn" onClick={onTutorial}>Replay the tutorial</button>
-      </div>
+      {/* replays only from the camp, never in the middle of a run */}
+      {onIntro && onTutorial && (
+        <div className="settings-actions">
+          <button className="btn" onClick={onIntro}>Replay the intro</button>
+          <button className="btn" onClick={onTutorial}>Replay the tutorial</button>
+        </div>
+      )}
       <div className="settings-actions">
         <button className="btn btn-share" onClick={onClose}>Done</button>
       </div>

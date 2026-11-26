@@ -3,7 +3,7 @@ import './index.css';
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CarveCard, FellAgainCard, GameOverCard, GraveCard, IntroCard, SpentCard, VictoryCard } from './game/Cards';
-import { Hud, MuteButton } from './game/Hud';
+import { Hud } from './game/Hud';
 import { Standby, type StandbyHandle } from './game/Standby';
 import { isDayOver, verdictFor } from './game/reveal';
 import { MapOverlay } from './game/MapScroll';
@@ -11,7 +11,7 @@ import { GearButton, Settings } from './game/Settings';
 import { Comic } from './onboarding/Comic';
 import { Tutorial } from './onboarding/Tutorial';
 import { isOnboarded, markOnboarded } from './onboarding/progress';
-import { sound } from './engine/sound';
+import { sound, type Mode } from './engine/sound';
 import { Stage } from './game/Stage';
 import { cellOf } from '../shared/board';
 import { directionBetween } from '../shared/epitaphs';
@@ -59,6 +59,25 @@ export const App = () => {
     return () => document.removeEventListener('click', tick, true);
   }, []);
 
+  // the music follows the story: the music box at camp, the eerie song in the dungeon,
+  // and only the wind in the moments between (a death, the walk out, the soul's way home)
+  const musicMode: Mode = view === 'board'
+    ? (s.card.kind === 'gameOver' || soulLeaving || exiting ? 'quiet' : 'dungeon')
+    : (reviving !== null || (victoryView && !continuing) ? 'quiet' : 'camp');
+  useEffect(() => {
+    if (sound.started) sound.setMode(musicMode);
+  }, [musicMode]);
+
+  // every death has its own sting; the last one tolls
+  const lastCard = useRef(s.card.kind);
+  useEffect(() => {
+    const was = lastCard.current;
+    lastCard.current = s.card.kind;
+    if (was === s.card.kind || !sound.started) return; // nothing plays before the first tap
+    if (s.card.kind === 'gameOver') sound.play('gameover');
+    else if ((s.card.kind === 'carve' || s.card.kind === 'fellAgain') && was === 'none') sound.play('death');
+  }, [s.card.kind]);
+
   // re-read every render: a post left open overnight unlocks the full reveal at the reset
   const dayOver = s.board ? isDayOver(s.board.day) : false;
   const scene = useMemo<SceneState | null>(() => {
@@ -97,11 +116,11 @@ export const App = () => {
   }, [s.board, s.revealed, s.player, s.graves, s.phase, s.me, s.card, s.carveDir, s.fading, soulLeaving, exiting, dayOver]);
 
   /** Fade to black, swap what's on screen, fade back in. */
-  const crossFade = useCallback((to: 'camp' | 'board') => {
+  const crossFade = useCallback((to: 'camp' | 'board', cue?: 'start' | 'victory') => {
     setFade(true);
     window.setTimeout(() => {
       setView(to);
-      sound.setMode(to === 'board' ? 'dungeon' : 'camp');
+      if (cue) sound.play(cue);
       window.setTimeout(() => { setFade(false); setEntering(false); }, 120);
     }, 420);
   }, []);
@@ -119,8 +138,8 @@ export const App = () => {
     if (entering) return;
     setEntering(true);
     void startRun();
-    if (standby.current) standby.current.enter(() => crossFade('board'), (cue) => sound.play(cue));
-    else { sound.play('door'); crossFade('board'); }
+    if (standby.current) standby.current.enter(() => crossFade('board', 'start'), (cue) => sound.play(cue));
+    else { sound.play('door'); crossFade('board', 'start'); }
   }, [entering, crossFade, startRun]);
 
   // first time in: the comic, then the practice room, then the real dungeon
@@ -143,7 +162,7 @@ export const App = () => {
       if (onboarding.thenEnter) {
         void startRun();
         setView('board');
-        sound.setMode('dungeon');
+        sound.play('start');
       }
     });
   };
@@ -171,9 +190,9 @@ export const App = () => {
 
   if (view === 'camp') {
     return (
-      <main className="app" onPointerDown={() => sound.setMode('camp')}>
+      <main className="app" onPointerDown={() => sound.setMode(musicMode)}>
         {reviving === null && !victoryView && (
-          <div className="camp-corner"><GearButton onClick={() => setSettingsOpen(true)} /><MuteButton /></div>
+          <div className="camp-corner"><GearButton onClick={() => setSettingsOpen(true)} /></div>
         )}
         {settingsOpen && (
           <Settings
@@ -213,12 +232,13 @@ export const App = () => {
 
   return (
     <main className="app">
-      {s.me ? <Hud me={s.me} day={s.day?.day ?? null} onHelp={openHelp} onMap={() => setMapOpen(true)} hidden={soulLeaving || exiting} /> : <header className="hud" />}
+      {s.me ? <Hud me={s.me} day={s.day?.day ?? null} onHelp={openHelp} onMap={() => setMapOpen(true)} onSettings={() => setSettingsOpen(true)} hidden={soulLeaving || exiting} /> : <header className="hud" />}
+      {settingsOpen && <Settings onClose={() => setSettingsOpen(false)} />}
       <Stage
         scene={scene} onTap={tap} onFallDone={onFallDone} onCrossDone={onCrossDone}
         onExitDone={() => {
           setVictoryView(true);
-          crossFade('camp');
+          crossFade('camp', 'victory');
         }}
         onSoulGone={() => {
           setReviving('soul');
