@@ -20,7 +20,7 @@ Every visit starts in the dark. A dwarf rests by a campfire, the only light ther
 
 ### First time in
 
-New players don't have to read anything. The first time you press **Enter the dungeon**, a four-panel comic sets the scene in fifteen seconds: the dungeon grows a new room every day, its floor hides pits, the fallen carve arrows to warn you or to fool you. Then a one-minute practice room teaches one thing per line, with a pointer on the stone to tap: stepping, blank stones, numbers, slabs that may lie, and the door. Both can be skipped, and both can be replayed from **Settings** (the gear on the camp), which also has separate music and sound-effect volumes.
+New players don't have to read anything. The first time you press **Enter the dungeon**, a short comic tells the story: Brom and his brother Kett kept the last fire before the Deep, until one night Kett took a torch through the door and never came back, leaving only a slab with an arrow carved in it. The Deep grows a new room every day, and the fallen carve arrows, some true, some lies. Brom lights his torch: one room a day, he'll find Kett. Then a one-minute practice room teaches one thing per line, with a pointer on the stone to tap: stepping, blank stones, numbers, slabs that may lie, and the door. Both can be skipped, and both can be replayed from **Settings** (the gear on the camp), which also has separate music and sound-effect volumes.
 
 ## How to play
 

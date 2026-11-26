@@ -1,6 +1,8 @@
-// The comic's panels: tiny pixel scenes drawn live from the game's own art
-// (0x72's CC0 tiles, the hand-pixelled slab, arrow, ghost and digits).
+// The comic's panels: the story of Brom and his lost brother Kett, told in tiny
+// pixel scenes drawn live from the game's own art (0x72's CC0 tiles and dwarf,
+// Idylwild's CC0 campfire, the hand-pixelled slab, arrow and ghost).
 import atlasUrl from '../assets/dungeon.png';
+import campfireUrl from '../assets/campfire.png';
 import { FRAMES, HERO_IDLE, HERO_RUN, type FrameName } from '../engine/atlas';
 import { C, type ColorKey } from '../engine/palette';
 import { getSprites } from '../engine/sprites';
@@ -9,15 +11,23 @@ export const PANEL_W = 112;
 export const PANEL_H = 56;
 const T = 16;
 
-let atlas: HTMLImageElement | null = null;
-export const loadAtlas = (): Promise<HTMLImageElement> =>
+const load = (src: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
-    if (atlas?.complete) { resolve(atlas); return; }
     const img = new Image();
-    img.onload = () => { atlas = img; resolve(img); };
-    img.onerror = () => reject(new Error('atlas failed to load'));
-    img.src = atlasUrl;
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`failed to load ${src}`));
+    img.src = src;
   });
+
+let atlas: HTMLImageElement | null = null;
+let fire: HTMLImageElement | null = null;
+/** the tiles (returned) and the campfire (kept for the panels that need it) */
+export const loadAtlas = async (): Promise<HTMLImageElement> => {
+  if (!atlas || !fire) [atlas, fire] = await Promise.all([load(atlasUrl), load(campfireUrl)]);
+  return atlas;
+};
+const FIRE_W = 26;
+const FIRE_H = 37;
 
 type Draw = (x: CanvasRenderingContext2D, img: HTMLImageElement, t: number) => void;
 
@@ -62,75 +72,115 @@ const flame = (x: CanvasRenderingContext2D, fx: number, fy: number, t: number) =
   px(x, 'warm4', fx + lean, fy - 4);
 };
 
-/** 1. Every day, the dungeon grows a new room. */
-const room: Draw = (x, img, t) => {
+/** Kett: the same dwarf, his hair and cloak a cold blue-grey so the brothers can be told apart. */
+const kett = (x: CanvasRenderingContext2D, img: HTMLImageElement, name: FrameName, dx: number, dy: number, flip = false) => {
+  x.save();
+  x.filter = 'hue-rotate(185deg) saturate(0.55) brightness(1.05)';
+  tile(x, img, name, dx, dy, flip);
+  x.restore();
+};
+
+const campfire = (x: CanvasRenderingContext2D, cx: number, base: number, t: number) => {
+  if (!fire) return;
+  const f = Math.floor(t * 7) % 4;
+  x.drawImage(fire, f * FIRE_W, 0, FIRE_W, FIRE_H, cx - FIRE_W / 2, base - FIRE_H + 6, FIRE_W, FIRE_H);
+};
+
+const embers = (x: CanvasRenderingContext2D, cx: number, base: number, t: number) => {
+  for (let k = 0; k < 5; k++) {
+    const q = (t * 0.5 + k * 0.21) % 1;
+    px(x, q < 0.5 ? 'warm5' : 'warm3', cx + Math.sin(t * 2 + k * 1.7) * 4, base - 12 - q * 26);
+  }
+};
+
+/** 1. Brom and his brother Kett kept the last fire before the Deep. */
+const fireside: Draw = (x, img, t) => {
+  floor(x, img);
+  campfire(x, 56, 46, t);
+  const brom = standing(1, 2), k = standing(4, 2);
+  tile(x, img, HERO_IDLE[Math.floor(t * 4) % 4] ?? 'floor_1', brom.x + 10, brom.y);
+  kett(x, img, HERO_IDLE[(Math.floor(t * 4) + 2) % 4] ?? 'floor_1', k.x + 6, k.y, true);
+  embers(x, 56, 46, t);
+  light(x, 56, 34, 46 + Math.sin(t * 8) * 1.5);
+};
+
+/** 2. One night, Kett took a torch and went through the door. */
+const door: Draw = (x, img, t) => {
+  for (let c = 0; c < 7; c++) { tile(x, img, 'wall_top_mid', c * T, -10); tile(x, img, 'wall_mid', c * T, 6); }
+  // the open door, nothing but black beyond it
+  px(x, 'void0', 43, -7, 26, 27);
+  tile(x, img, 'doors_leaf_open', 40, -10);
+  tile(x, img, 'doors_frame_left', 24, -10);
+  tile(x, img, 'doors_frame_right', 72, -10);
+  for (let r = 1; r < 4; r++) for (let c = 0; c < 7; c++) tile(x, img, (c * 3 + r) % 4 ? 'floor_1' : 'floor_3', c * T, r * T + 6);
+  // Kett walks up into the dark, and the doorway swallows him
+  const k = (t % 3) / 3;
+  const ky = 34 - k * 26;
+  x.save();
+  x.beginPath();
+  x.rect(0, 12, PANEL_W, PANEL_H);
+  x.clip();
+  kett(x, img, HERO_RUN[Math.floor(t * 8) % 4] ?? 'floor_1', 48, ky);
+  x.restore();
+  if (ky > 6) {
+    px(x, 'ink', 62, ky + 7, 3, 10);
+    px(x, 'warm2', 63, ky + 8, 1, 8);
+    flame(x, 63, ky + 6, t);
+  }
+  light(x, 62, ky + 10, 34);
+};
+
+/** 3. He never came back. Only a slab, with an arrow carved in it. */
+const slab: Draw = (x, img, t) => {
+  floor(x, img);
+  const sp = getSprites();
+  const stone = at(3, 1);
+  x.drawImage(sp.slab.canvas, stone.x + 2, stone.y + 2);
+  x.drawImage(sp.arrow(1, 'pst1').canvas, stone.x + 4, stone.y + 4);
+  // a faint, cold light on it, as if something still watched over it
+  light(x, stone.x + 8, stone.y + 8, 22 + Math.sin(t * 1.3) * 1.5, 'rgba(120, 160, 230, 0.10)');
+};
+
+/** 4. Every day the Deep grows a new room. The fallen carve arrows: some true, some lies. */
+const lies: Draw = (x, img, t) => {
+  floor(x, img);
+  const sp = getSprites();
+  const slabs = [[1, 1, 2], [3, 2, 6], [5, 1, 4]] as const;
+  slabs.forEach(([c, r, dir], n) => {
+    const stone = at(c, r);
+    x.drawImage(sp.slab.canvas, stone.x + 2, stone.y + 2);
+    const lie = (Math.floor(t / 0.9) + n) % 2 === 1;
+    x.drawImage(sp.arrow(dir, lie ? 'red2' : 'warm4').canvas, stone.x + 4, stone.y + 4);
+  });
+  const g = sp.ghost[Math.floor(t * 2.5) % 2]!;
+  x.save();
+  x.globalAlpha = 0.6;
+  x.drawImage(g.canvas, 30 + Math.sin(t * 0.7) * 10, 6 + Math.sin(t * 2) * 2);
+  x.drawImage(g.canvas, 78 + Math.sin(t * 0.9 + 2) * 8, 24 + Math.sin(t * 2.3) * 2);
+  x.restore();
+  light(x, 56, 28, 48, 'rgba(120, 170, 255, 0.10)');
+};
+
+/** 5. Brom lights his torch. One room a day, he'll find Kett. */
+const vow: Draw = (x, img, t) => {
   for (let c = 0; c < 7; c++) { tile(x, img, 'wall_top_mid', c * T, -10); tile(x, img, 'wall_mid', c * T, 6); }
   tile(x, img, 'doors_leaf_closed', 40, -10);
   tile(x, img, 'doors_frame_left', 24, -10);
   tile(x, img, 'doors_frame_right', 72, -10);
   for (let r = 1; r < 4; r++) for (let c = 0; c < 7; c++) tile(x, img, (c * 3 + r) % 4 ? 'floor_1' : 'floor_3', c * T, r * T + 6);
-  light(x, 56, 16, 46 + Math.sin(t * 2) * 3, 'rgba(200, 60, 40, 0.12)');
-};
-
-/** 2. Its floor hides pits. */
-const fall: Draw = (x, img, t) => {
-  floor(x, img);
-  const pit = at(3, 2);
-  tile(x, img, 'hole', pit.x, pit.y);
-  // the dwarf steps onto the stone and drops through it, again and again
-  const k = (t % 2.2) / 2.2;
-  const sink = Math.max(0, Math.min(1, (k - 0.15) * 1.6));
-  const hero = standing(3, 2);
-  x.save();
-  x.beginPath();
-  x.rect(0, 0, PANEL_W, pit.y + 12);
-  x.clip();
-  tile(x, img, HERO_RUN[Math.floor(t * 10) % 4] ?? 'floor_1', hero.x, hero.y + sink * 26);
-  x.restore();
-  if (k > 0.5) for (let n = 0; n < 6; n++) px(x, 'pst3', pit.x + 2 + n * 2 + Math.sin(n + t * 8) * 2, pit.y + 8 - (k - 0.5) * 12 * ((n % 3) + 1));
-  light(x, pit.x + 8, pit.y + 4, 44);
-};
-
-/** 3. The fallen carve arrows, to warn you or to fool you. */
-const carve: Draw = (x, img, t) => {
-  floor(x, img);
-  const sp = getSprites();
-  const stone = at(2, 2);
-  // the slab sits on its stone exactly as in the game, the arrow carved into it
-  x.drawImage(sp.slab.canvas, stone.x + 2, stone.y + 2);
-  // the arrow flickers between a warning and a lie
-  const lie = Math.floor(t / 1.1) % 2 === 1;
-  x.drawImage(sp.arrow(lie ? 6 : 2, lie ? 'red2' : 'warm4').canvas, stone.x + 4, stone.y + 4);
-  const ghost = sp.ghost[Math.floor(t * 2.5) % 2]!;
-  x.save();
-  x.globalAlpha = 0.85;
-  x.drawImage(ghost.canvas, 58, 14 + Math.round(Math.sin(t * 2.2) * 2));
-  x.restore();
-  light(x, 52, 32, 42, 'rgba(120, 170, 255, 0.12)');
-};
-
-/** 4. Cross the dark. Trust the numbers. Doubt the dead. */
-const cross: Draw = (x, img, t) => {
-  floor(x, img);
-  const sp = getSprites();
-  // numbers drawn on their stones exactly where the game draws them
-  for (const [n, c, r] of [[1, 1, 1], [2, 5, 2], [1, 1, 2]] as const) {
-    const { x: cx, y: cy } = at(c, r);
-    x.drawImage(sp.digit(n, 'ink').canvas, cx + 7, cy + 6);
-    x.drawImage(sp.digit(n, n === 2 ? 'warm4' : 'bone3').canvas, cx + 6, cy + 5);
-  }
-  const hero = standing(3, 2);
-  tile(x, img, HERO_IDLE[Math.floor(t * 7) % 4] ?? 'floor_1', hero.x, hero.y);
-  // torch held out, flame dancing
-  px(x, 'ink', hero.x + 13, hero.y + 8, 3, 10);
-  px(x, 'warm2', hero.x + 14, hero.y + 9, 1, 8);
-  flame(x, hero.x + 14, hero.y + 7, t);
-  light(x, hero.x + 12, hero.y + 12, 40 + Math.sin(t * 9) * 1.5);
+  const brom = { x: 48, y: 26 };
+  tile(x, img, HERO_IDLE[Math.floor(t * 6) % 4] ?? 'floor_1', brom.x, brom.y);
+  // the torch held high: it caught only a moment ago
+  px(x, 'ink', brom.x + 13, brom.y + 4, 3, 12);
+  px(x, 'warm2', brom.x + 14, brom.y + 5, 1, 10);
+  flame(x, brom.x + 14, brom.y + 3, t);
+  light(x, brom.x + 12, brom.y + 8, 40 + Math.sin(t * 9) * 1.5);
 };
 
 export const PANELS: readonly { draw: Draw; caption: string; sfx?: { text: string; tone: 'red' | 'gold' | 'blue' } }[] = [
-  { draw: room, caption: 'Every day, the dungeon grows a new room.', sfx: { text: 'RMMBL…', tone: 'red' } },
-  { draw: fall, caption: 'Its floor hides pits.', sfx: { text: 'AAAH!', tone: 'red' } },
-  { draw: carve, caption: 'The fallen carve arrows, to warn you… or to fool you.', sfx: { text: 'SKRITCH', tone: 'blue' } },
-  { draw: cross, caption: 'Cross the dark. Trust the numbers. Doubt the dead.', sfx: { text: 'FWOOSH', tone: 'gold' } },
+  { draw: fireside, caption: 'Brom and his brother Kett kept the last fire before the Deep.', sfx: { text: 'crackle', tone: 'gold' } },
+  { draw: door, caption: 'One night, Kett took a torch and went through the door.', sfx: { text: 'CREAK', tone: 'red' } },
+  { draw: slab, caption: 'He never came back. Only a slab, with an arrow carved in it.', sfx: { text: '…', tone: 'blue' } },
+  { draw: lies, caption: 'Every day the Deep grows a new room. The fallen carve arrows: some true, some lies.', sfx: { text: 'SKRITCH', tone: 'blue' } },
+  { draw: vow, caption: 'Brom lights his torch. One room a day, he will find Kett.', sfx: { text: 'FWOOSH', tone: 'gold' } },
 ];
