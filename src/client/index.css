@@ -591,11 +591,3 @@ body {
 .settings-row input[type='range'] { width: 100%; accent-color: #e19a43; }
 .settings-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 
-/* carving in the tutorial: compass on the left, the verdict and Carve on the right, same height as any step */
-.tutorial-coach.is-carving { gap: 6px; }
-.tutorial-coach.is-carving .tutorial-text { font-size: 14px; max-width: 40ch; }
-.tutorial-carve { display: flex; align-items: center; gap: 14px; }
-.tutorial-compass { --cb: 26px; gap: 2px; }
-.tutorial-compass .compass-core { margin: 6px; }
-.tutorial-carve-side { display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 150px; }
-.tutorial-carve-side .carve-verdict { font-size: 12px; text-align: center; }

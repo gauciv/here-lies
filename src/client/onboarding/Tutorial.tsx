@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { COLS, ROWS, START, idx, type Board, type Cell } from '../../shared/board';
-import { directionBetween, directionName, validDirections, type Direction } from '../../shared/epitaphs';
+import { directionBetween, type Direction } from '../../shared/epitaphs';
+import type { MeDto } from '../../shared/api';
 import type { GraveView, Phase, SceneState } from '../engine/scene';
-import { arrowRows } from '../engine/sprites';
 import { sound } from '../engine/sound';
-import { PixelIcon } from '../game/PixelIcon';
+import { CarveCard } from '../game/Cards';
 import { Stage } from '../game/Stage';
 
 /**
@@ -46,13 +46,18 @@ const STEPS: readonly Step[] = [
   { text: 'A slab! Someone fell from this stone. Its arrow points at the pit that took them…', show: SLAB },
   { text: '…or it lies. Anyone can carve a lie.', show: SLAB },
   { text: 'Every fall burns one of your 3 candles. Step here and see.', tap: PIT, kind: 'fall' },
-  { text: 'You fell. Carve an arrow: at your pit to warn the next walker, anywhere else to fool them.', kind: 'carve' },
-  { text: 'Your arrow waits here for whoever comes next. Carving is always up to you.', kind: 'respawn', button: 'Respawn' },
+  { text: 'You fell. Carve an arrow for the next walker.', kind: 'carve' },
+  { text: 'Whatever you chose, it stays here for the next walker. Carving is always up to you.', kind: 'respawn', button: 'Respawn' },
   { text: 'Back at the entrance. Now find the door in the far wall.', kind: 'walk' },
   { text: 'Three candles a day, one door. Good luck in the dark.', kind: 'done', button: 'Enter the dungeon' },
 ];
 
-const COMPASS: readonly (Direction | null)[] = [7, 0, 1, 6, null, 2, 5, 4, 3];
+/** a stand-in for the player while practising, so the game's own carve card can be shown */
+const PRACTICE_ME: MeDto = {
+  username: 'you', candles: 2, crossed: false, rank: null, steps: null, revealed: [], uncarved: idx(3, 5),
+  uncarvedSkippable: true, uncarvedQueued: false, fellInto: [idx(4, 5)], runs: [], streak: 0, bestStreak: 0,
+  shared: false, startedAt: null, endedAt: null, time: null, standing: null, myArrow: null,
+};
 
 /**
  * The tutorial: a practice room that shows everything you need, one line at a
@@ -113,10 +118,9 @@ export const Tutorial = ({ onDone }: { onDone: () => void }) => {
     go(step + 1);
   };
 
-  const carve = () => {
-    if (aim === null) return;
+  const carve = (d: Direction) => {
     sound.play('carve');
-    setCarved(aim);
+    setCarved(d);
     go(step + 1); // the ghost stays, lighting its new slab, until you respawn
   };
 
@@ -146,7 +150,6 @@ export const Tutorial = ({ onDone }: { onDone: () => void }) => {
     };
   }, [revealed, player, phase, ghost, fading, aim, carved, current]);
 
-  const valid = validDirections(PRACTICE, LEDGE);
   const nextAction = current.kind === 'respawn' ? respawn : current.kind === 'done' ? onDone : () => go(step + 1);
   const showButton = !current.tap && current.kind !== 'walk' && current.kind !== 'carve';
 
@@ -157,32 +160,19 @@ export const Tutorial = ({ onDone }: { onDone: () => void }) => {
         <span className="tutorial-count">{step + 1} / {STEPS.length}</span>
         <button className="tutorial-skip" onClick={onDone}>Skip</button>
       </header>
-      <Stage scene={scene} onTap={tap} onFallDone={onFallDone} onCrossDone={() => undefined} />
-      <footer className={`tutorial-coach${current.kind === 'carve' ? ' is-carving' : ''}`} aria-live="polite">
-        <p className="tutorial-text">{current.text}</p>
+      <Stage scene={scene} onTap={tap} onFallDone={onFallDone} onCrossDone={() => undefined} focusRow={current.kind === 'carve' ? PIT.r : null}>
         {current.kind === 'carve' && (
-          <div className="tutorial-carve">
-            <div className="compass tutorial-compass" role="group" aria-label="Choose an arrow">
-              {COMPASS.map((d, k) => d === null ? <span key={k} className="compass-core" aria-hidden="true" /> : (
-                <button
-                  key={k}
-                  className={`btn btn-compass${d === aim ? ' is-picked' : d === fellToward ? ' is-truth' : ''}`}
-                  disabled={!valid.includes(d)}
-                  aria-label={`Aim the arrow ${directionName(d)}${d === fellToward ? ' (the way you fell)' : ''}`}
-                  onClick={() => setAim(d)}
-                >
-                  <PixelIcon rows={arrowRows(d)} legend={{ '#': 'ink' }} size={3} />
-                </button>
-              ))}
-            </div>
-            <div className="tutorial-carve-side">
-              <p className={`carve-verdict${aim === null ? '' : aim === fellToward ? ' is-true' : ' is-lie'}`}>
-                {aim === null ? 'The glowing arrow is the way you fell.' : aim === fellToward ? 'The truth: it warns them.' : 'A lie: it fools them.'}
-              </p>
-              <button className="btn btn-share" disabled={aim === null} onClick={carve}>Carve</button>
-            </div>
+          // the game's own carve card, docked over the board exactly as after a real fall
+          <div className="card-layer card-layer-top">
+            <CarveCard
+              me={PRACTICE_ME} board={PRACTICE} stone={LEDGE} fellToward={fellToward} selected={aim}
+              onSelect={(d) => { sound.play('ui'); setAim(d); }} onCarve={carve} onSkip={() => go(step + 1)}
+            />
           </div>
         )}
+      </Stage>
+      <footer className="tutorial-coach" aria-live="polite">
+        <p className="tutorial-text">{current.text}</p>
         {showButton && <button className="btn btn-share" onClick={nextAction}>{current.button ?? 'Next'}</button>}
       </footer>
     </div>
