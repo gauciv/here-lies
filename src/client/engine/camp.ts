@@ -89,6 +89,8 @@ export class CampScene {
   private reviveT0 = -1;
   private reviveKind: 'soul' | 'return' = 'soul';
   private victory = false;
+  /** the moment of crossing: one big burst of sparks from the raised torch */
+  private burstPending = false;
   private homeT0 = -1;
   private onHome: (() => void) | null = null;
   private onRevived: (() => void) | null = null;
@@ -145,6 +147,7 @@ export class CampScene {
   celebrate(): void {
     this.victory = true;
     this.homeT0 = -1;
+    this.burstPending = true;
   }
 
   /** He walks on for a while, the floor rolling by, until the fire comes into view ahead. */
@@ -536,6 +539,16 @@ export class CampScene {
     if (entering && p >= 0.3 && p < 0.33 && this.sparks.length < 14) {
       for (let k = 0; k < 4; k++) {
         this.sparks.push({ x: tip.x, y: tip.y, vx: (hash2(k, Math.floor(now)) - 0.5) * 50, vy: -20 - hash2(Math.floor(now), k) * 40, life: 0.5 });
+      }
+    }
+    if (this.burstPending && celebrating) {
+      this.burstPending = false;
+      if (!this.reduced) {
+        for (let k = 0; k < 36; k++) {
+          const a = (k / 36) * Math.PI * 2;
+          const v = 40 + hash2(k, 17) * 55;
+          this.sparks.push({ x: hx + 8, y: hy + 2, vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.8 - 45, life: 0.7 + hash2(k, 29) * 0.7 });
+        }
       }
     }
     this.sparks = this.sparks.filter((s) => (s.life -= dt) > 0);
