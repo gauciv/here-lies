@@ -74,6 +74,10 @@ export type SceneEvents = {
 
 type Mote = { x: number; y: number; vx: number; vy: number; life: number; seed: number };
 type Shatter = { x: number; y: number; t0: number };
+/** a moment of feedback on one stone: dust where a foot lands, a flare where a number appears */
+type Spark = { c: number; r: number; t0: number };
+const PUFF_MS = 420;
+const FLARE_MS = 520;
 const REVIVE_MS = 1500;
 const LEAVE_MS = 2000;
 const EXIT_MS = 1500;
@@ -131,6 +135,8 @@ export class Scene {
   private motes: Mote[] = [];
   private embers: Mote[] = [];
   private shatters: Shatter[] = [];
+  private puffs: Spark[] = [];
+  private flares: Spark[] = [];
   private fade = 0;
   private reviveT0 = -1;
   private raf = 0;
@@ -186,6 +192,12 @@ export class Scene {
           this.torchGlow = 0;
         }
       }
+    }
+    // numbers that just came to light flare for a moment
+    if (prev && !this.reduced) {
+      next.revealed.forEach((i) => {
+        if (!prev.revealed.has(i)) this.flares.push({ c: i % COLS, r: Math.floor(i / COLS), t0: now });
+      });
     }
     if (next.soulLeaving && !prev?.soulLeaving) this.leaveT0 = now;
     if (next.exiting && !prev?.exiting) this.exitT0 = now;
@@ -432,7 +444,10 @@ export class Scene {
       this.pos.x = this.hopFrom.x + (s.player.c - this.hopFrom.x) * e;
       this.pos.y = this.hopFrom.y + (s.player.r - this.hopFrom.y) * e;
       hop = Math.sin(hopP * Math.PI) * 3;
-      if (hopP >= 1) this.hopT0 = -1;
+      if (hopP >= 1) {
+        this.hopT0 = -1;
+        if (s.phase === 'walking') this.puffs.push({ c: s.player.c, r: s.player.r, t0: now });
+      }
     }
 
     let fallP = 0, crossP = 0;
@@ -503,6 +518,35 @@ export class Scene {
         const dx = (hash2(k, 11) - 0.5) * 16 * (0.3 + p), dy = -p * 7 + (hash2(k, 13) - 0.5) * 8;
         this.px(ctx, k % 2 ? 'pst2' : 'pst1', Math.round(sh.x + dx), Math.round(sh.y + dy));
       }
+    }
+
+    // a puff of dust where the boots land
+    this.puffs = this.puffs.filter((f) => now - f.t0 < PUFF_MS);
+    for (const f of this.puffs) {
+      const p = (now - f.t0) / PUFF_MS;
+      const bx = f.c * TILE + 8, by = TOP + f.r * TILE + 13;
+      for (let k = 0; k < 6; k++) {
+        const side = k % 2 ? 1 : -1;
+        const dx = side * (2 + (k >> 1) * 2) * (0.4 + p * 1.1);
+        const dy = -p * (2 + (k >> 1)) + p * p * 1.5;
+        if (hash2(k, f.c * 13 + f.r) < p * 1.2) continue; // thins as it settles
+        this.px(ctx, k < 2 ? 'pst3' : 'pst2', Math.round(bx + dx), Math.round(by + dy));
+      }
+    }
+    // a newly lit stone glows up from beneath its number, then settles
+    this.flares = this.flares.filter((f) => now - f.t0 < FLARE_MS);
+    for (const f of this.flares) {
+      const p = (now - f.t0) / FLARE_MS;
+      if (clue(s.board, f.c, f.r) === 0) continue;
+      ctx.save();
+      ctx.globalAlpha = (1 - p) * 0.55;
+      ctx.fillStyle = C.warm4;
+      const g = Math.round(1 + p * 2);
+      const onSlab = s.graves.has(idx(f.c, f.r));
+      const ox = onSlab ? -5 : 0, oy = onSlab ? -4 : 0;
+      ctx.fillRect(f.c * TILE + 5 + ox - g, TOP + f.r * TILE + 4 + oy - g, 7 + g * 2, 9 + g * 2);
+      ctx.restore();
+      this.drawClue(ctx, s.board, f.c, f.r, onSlab); // the number stays crisp over its glow
     }
 
     // hero
