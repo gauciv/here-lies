@@ -591,3 +591,17 @@ body {
 .settings-row input[type='range'] { width: 100%; accent-color: #e19a43; }
 .settings-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 
+
+/* the last candle is out: a tombstone title over the dark room */
+.game-over-title {
+  position: absolute; top: 6%; left: 0; right: 0; margin: 0; z-index: 6; pointer-events: none;
+  text-align: center; font-family: 'Jacquard 24', var(--font); font-size: clamp(52px, 17vw, 84px); line-height: 1;
+  color: #c8423a; text-shadow: 0 3px 0 #2a0d0b, 0 0 18px rgba(200, 66, 58, 0.45); letter-spacing: 0.02em;
+  animation: game-over-in 1.6s ease-out both;
+}
+@keyframes game-over-in {
+  0% { opacity: 0; transform: translateY(-10px) scale(1.08); filter: blur(3px); }
+  60% { opacity: 1; filter: blur(0); }
+  100% { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .game-over-title { animation: none; } }

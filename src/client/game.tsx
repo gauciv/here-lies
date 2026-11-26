@@ -267,6 +267,7 @@ export const App = () => {
           </div>
         )}
         {s.toast && <div className="toast" role="status">{s.toast}</div>}
+        {(card.kind === 'gameOver' || soulLeaving) && <p className="game-over-title" aria-hidden="true">Game Over</p>}
       </Stage>
       {mapOpen && <MapOverlay day={s.day} me={s.me} onClose={() => setMapOpen(false)} />}
       <footer className={`hint${endActions ? ' has-actions' : ''}`} aria-live="polite">
