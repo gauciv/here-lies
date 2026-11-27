@@ -7,11 +7,9 @@
   Frames are packed into `src/client/assets/dungeon.png` by `tools/build_atlas.py`.
 - **Idylwild's Chromatic Campfires** by Idylwild: the standby room's campfire.
   <https://opengameart.org/content/idylwilds-chromatic-campfires> · License: CC0 1.0. Frames sliced by `tools/build_extras.py`.
-- **Parchment GUI** by zwonky: the standby room's parchment scroll, recoloured to aged-paper tones.
-  <https://opengameart.org/content/parchment-gui> · License: CC0 1.0. Prepared by `tools/build_extras.py`.
 - **Scroll UI Container** by Chloe Wolfe: the record scroll, pixelated, recoloured and outlined to match the game.
   <https://opengameart.org/content/scroll-ui-container> · License: CC0 1.0. Prepared by `tools/build_scroll.py`.
-- The app icon is built by `tools/build_icon.py` from the same pixels: CC0 floor tiles and the original slab and arrow.
+- The app icon is built by `tools/build_icon.py` from the same pixels: CC0 floor tiles and dwarf, and the original torch, slab and arrow.
 - Torch, flame, grave slabs, arrows, ghost, candles, digits, lighting and all sound are original to Here Lies (hand-pixelled / synthesized in code).
 
 ## Fonts
